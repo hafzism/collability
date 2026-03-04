@@ -1,414 +1,279 @@
-# Week 1: Project Foundation & Planning
+# Collability
 
-**Duration:** Week 1 of 4  
-**Project Type:** Team Project
+> A real-time collaborative team workspace — combining the best of Kanban boards, collaborative documents, and modern team tooling.
 
-## Overview
+Collability demonstrates how to build a production-grade collaboration system with CRDT-based real-time editing, offline-first synchronization, and a relational metadata layer. It simulates the architecture behind tools like Notion, Trello, and Figma — practical, scalable, and built for real teams.
 
-This week is about planning and setup. By end of week, you should have:
-- Clear project idea and plan
-- All setup done (frontend + backend)
-- Everyone knows what they're building
-- GitHub project board ready
+---
+
+## Demo
+
+> _Screenshots and GIFs coming soon._
+
+Planned previews:
+- Board with lists and cards
+- Real-time collaborative card description editing
+- Live presence indicators
+- Drag-and-drop card ordering
+
+---
+
+## Features
+
+### Workspace & Collaboration
+- Workspaces with multiple boards
+- Board → Lists → Cards hierarchy
+- Role-based access control (Admin / Member / Guest)
+- Activity history and audit logs
+
+### Kanban Board
+- Create, edit, move, and archive cards
+- Drag-and-drop ordering
+- User assignments, due dates, and checklists
+
+### Real-Time Collaboration
+- Multi-user editing of card descriptions
+- Live presence indicators and cursor awareness
+- Automatic conflict resolution via CRDT synchronization
+
+### Offline First
+- Edits persist locally while offline
+- Changes sync automatically when connection is restored
+- Collaborative editing works even on unstable connections
+
+### Notifications
+- In-app notifications
+- Email notifications for important actions
+- Reliable background job processing
+
+### Attachments
+- File uploads via signed URLs
+- S3-compatible storage
+
+### Versioning
+- Activity logs
+- Snapshot-based version history
+- Restore previous document states
 
 ---
 
 ## Tech Stack
 
-**Frontend:** Next.js (App Router) + TypeScript
+### Frontend
+| Tool | Purpose |
+|---|---|
+| Next.js (App Router) | Framework |
+| React + TypeScript | UI |
+| Zustand | UI state management |
+| TanStack Query | Server data caching |
+| TipTap Editor | Rich text editing |
+| Yjs | Collaborative CRDT engine |
 
-**UI:** Tailwind CSS + shadcn/ui
+### Backend
+| Tool | Purpose |
+|---|---|
+| NestJS + TypeScript | API server |
+| PostgreSQL | Relational database |
+| Prisma ORM | Database access |
 
-**Backend:** Node.js + Express + TypeScript
+### Realtime Infrastructure
+| Tool | Purpose |
+|---|---|
+| Yjs | CRDT engine |
+| y-websocket | WebSocket sync provider |
+| y-indexeddb | Offline persistence |
 
-**Database:** MongoDB (Atlas)
+### Infrastructure
+| Tool | Purpose |
+|---|---|
+| Redis | Caching + presence |
+| BullMQ | Background jobs |
+| S3 | Attachments |
+| Docker | Containerization |
+| GitHub Actions | CI/CD |
 
-**Authentication:** JWT + Google OAuth
-
-**Version Control:** Git + GitHub Projects
-
----
-
-## Tasks & Deliverables
-
-### 1. Project Selection & Team Planning
-
-- Choose your project idea
-- Define what the project does (main features)
-- Identify target users
-- Create 4-week timeline
-- Assign WHO builds WHAT feature
-- Write down responsibilities for each team member
-
-**Deliverable:** Project proposal document (1-2 pages)
-
----
-
-### 2. Market Research
-
-- Research 3-5 similar products/apps
-- What features do they have?
-- What can you do better?
-- Calculate:
-  - **TAM:** Total market size
-  - **SAM:** Your target market
-  - **SOM:** What you can realistically capture
-- Document findings
-
-**Deliverable:** Market research report (1-2 pages)
+### Testing
+| Tool | Purpose |
+|---|---|
+| Jest | Unit tests |
+| Playwright | End-to-end tests |
 
 ---
 
-### 3. Product Requirements (PRD)
+## Architecture
 
-Write a simple PRD with:
-- What problem does your app solve?
-- Who are your users?
-- List of all features (priority: Must-have, Should-have, Nice-to-have)
-- Basic user stories (As a user, I want to...)
-- Success metrics
+Collability uses a **hybrid architecture** that separates concerns between real-time collaboration and structured metadata.
 
-**Deliverable:** PRD document (2-3 pages)
+### CRDT Layer (Real-Time Collaboration)
+Used for collaborative fields:
+- Card descriptions
+- Collaborative documents
+- Comments
 
----
+CRDT updates automatically merge changes across users without conflicts.
 
-### 4. Feature Breakdown & Ownership
+### Relational Database Layer
+Used for structured metadata:
+- Users, workspaces, boards, lists, cards
+- Assignments, permissions, due dates
 
-**CRITICAL TASK**
+This separation ensures **strong consistency** for metadata and **conflict-free collaboration** for documents.
 
-- List ALL features you'll build
-- Break each feature into smaller tasks
-- Assign each feature to a team member
-- Document dependencies (what depends on what)
-- Create responsibility matrix
+### System Diagram
 
-**By end of this task, everyone must know exactly what they're building**
+```
+Client (Next.js)
+   │
+   ├── REST API ──────────────► NestJS
+   │                               │
+   │                               ├── PostgreSQL  (metadata)
+   │                               ├── Redis       (cache + queues)
+   │                               └── S3          (attachments)
+   │
+   └── WebSocket ─────────────► Yjs Sync Server
+                                    │
+                                    └── CRDT updates + presence
+```
 
-**Deliverable:** Feature list with clear ownership
+### Realtime Sync Model
 
----
+Collaborative data is stored as Yjs CRDT documents with the following persistence schema:
 
-### 5. GitHub Setup
+```
+updates table          snapshots table
+─────────────          ───────────────
+document_id            document_id
+seq                    snapshot_blob
+update_blob            last_seq
+```
 
-**CRITICAL TASK**
+**Sync flow:**
+1. Client connects
+2. Server loads the latest snapshot
+3. Applies pending updates on top
+4. Client receives current state
+5. Edits are broadcast via WebSocket to all collaborators
 
-Create GitHub repository: `project-<team-name>`
-
-Setup GitHub Projects board:
-- Columns: Backlog, To Do, In Progress, Review, Done
-- Create issues for all Week 1 tasks
-- Assign issues to team members
-- Learn how to:
-  - Create issues
-  - Link commits to issues
-  - Create pull requests
-  - Move cards on board
-
-Setup repository:
-- Add all team members as collaborators
-- Set branch protection on main (require PR + 1 approval)
-- Create milestones for each week
-
-**Deliverable:** Active GitHub repo with project board
-
----
-
-### 6. System Architecture
-
-Design your system:
-- Draw frontend structure (pages, components)
-- Draw backend structure (routes, controllers, models)
-- Show how frontend talks to backend (API calls)
-- Show database collections
-- Plan API endpoints (e.g., POST /api/auth/login)
-- Map modules to team members
-
-**Deliverable:** Architecture diagram + API endpoint list
+Snapshots are periodically generated to prevent unbounded update log growth.
 
 ---
 
-### 7. Database Design
+## Project Structure
 
-**Using MongoDB**
+```
+apps/
+  api/
+    src/
+      auth/
+      users/
+      workspaces/
+      boards/
+      lists/
+      cards/
+      notifications/
+      attachments/
+  realtime/
+    yjs-server/
 
-- List all collections you need (users, products, orders, etc.)
-- For each collection, define:
-  - Fields and their types
-  - Required vs optional fields
-  - Relationships to other collections
-- Create Entity-Relationship diagram
-- Write MongoDB schemas
+packages/
+  database/
+  shared-types/
 
-**Deliverable:** ER diagram + MongoDB schema document
-
----
-
-### 8. UI Design in Figma
-
-Create designs for:
-- Landing page
-- Login/Signup pages
-- Dashboard
-- Main feature pages (3-5 screens)
-- Checkout page (if applicable)
-
-Design requirements:
-- Wireframes first, then high-fidelity designs
-- Define colors, fonts, spacing
-- Show mobile and desktop versions
-- Use consistent design system
-
-**Deliverable:** Figma file with 5-7 screens
-
----
-
-### 9. Explore shadcn/ui
-
-- Visit shadcn/ui documentation
-- Test components in a demo Next.js app
-- List components you'll use (Button, Card, Input, Dialog, etc.)
-- Understand how to install and use them
-
-**Deliverable:** Component list document
+apps/web/
+  components/
+  features/
+    boards/
+    cards/
+    editor/
+  lib/
+  hooks/
+  store/
+```
 
 ---
 
-### 10. Learn JWT Authentication
+## Running Locally
 
-Understand:
-- What is JWT (Header, Payload, Signature)
-- How JWT authentication works
-- Access tokens vs Refresh tokens
-- Where to store tokens (localStorage vs httpOnly cookies)
-- Security best practices
+### 1. Install dependencies
 
-Plan authentication flow:
-- Registration flow
-- Login flow
-- Google OAuth flow
-- Protected routes
-
-**Deliverable:** Authentication flow diagram
-
----
-
-### 11. Frontend Setup
-
-Initialize Next.js:
 ```bash
-npx create-next-app@latest frontend --typescript --tailwind --app
-cd frontend
-npx shadcn-ui@latest init
+pnpm install
 ```
 
-Setup:
-- Create folder structure:
-  - `/app` - pages
-  - `/components` - reusable components
-  - `/lib` - utilities
-  - `/hooks` - custom hooks
-  - `/types` - TypeScript types
-- Install shadcn/ui
-- Configure Tailwind CSS
-- Setup ESLint + Prettier
-- Create `.env.local` file (and `.env.example`)
-- Add basic components (Button, Card, Input)
-- Create Header and Footer components
-- Push to GitHub
+### 2. Start infrastructure
 
-**Deliverable:** Next.js project on GitHub
-
----
-
-### 12. Backend Setup
-
-Initialize Node.js backend:
 ```bash
-mkdir backend && cd backend
-npm init -y
-npm install express typescript ts-node @types/node @types/express
-npm install dotenv cors mongoose
-npm install -D nodemon
-npx tsc --init
+docker compose up
 ```
 
-Setup:
-- Create folder structure:
-  - `/src/routes` - API routes
-  - `/src/controllers` - business logic
-  - `/src/models` - MongoDB models
-  - `/src/middleware` - auth, validation
-  - `/src/utils` - helper functions
-  - `/src/config` - database config
-- Configure TypeScript
-- Setup ESLint + Prettier
-- Create `.env` file (and `.env.example`)
-- Setup MongoDB connection
-- Create User model
-- Create test endpoint: GET /health
-- Setup nodemon for development
-- Push to GitHub
+Starts: PostgreSQL, Redis, WebSocket server.
 
-**Deliverable:** Node.js backend on GitHub
+### 3. Run the backend
 
----
-
-### 13. Folder Structure
-
-Your repository should look like:
-```
-project-<team-name>/
-├── frontend/
-│   ├── app/
-│   ├── components/
-│   ├── lib/
-│   ├── hooks/
-│   ├── types/
-│   └── package.json
-├── backend/
-│   ├── src/
-│   │   ├── routes/
-│   │   ├── controllers/
-│   │   ├── models/
-│   │   ├── middleware/
-│   │   └── config/
-│   └── package.json
-├── docs/
-│   ├── PRD.md
-│   ├── architecture.md
-│   └── database-schema.md
-└── README.md
+```bash
+pnpm dev:api
 ```
 
-**Deliverable:** Organized repository structure
+### 4. Run the frontend
+
+```bash
+pnpm dev:web
+```
+
+### Environment Variables
+
+Create a `.env` file at the root:
+
+```env
+DATABASE_URL=
+REDIS_URL=
+
+S3_BUCKET=
+S3_ACCESS_KEY=
+S3_SECRET_KEY=
+
+JWT_SECRET=
+```
 
 ---
 
-### 14. Coding Standards
+## Testing
 
-**Naming Conventions:**
-- Components: `UserProfile.tsx` (PascalCase)
-- Functions/Variables: `getUserData` (camelCase)
-- Files: `auth-utils.ts` (kebab-case)
-- Constants: `API_BASE_URL` (UPPER_SNAKE_CASE)
+```bash
+# Unit tests
+pnpm test
 
-**Git Workflow:**
-- Branch naming: `feature/user-login`, `fix/auth-bug`
-- Commit format: `feat: add user login`, `fix: resolve auth bug`
-- Always create PR to merge into main
-- Get 1 approval before merging
-
-**Code Quality:**
-- Setup ESLint and Prettier
-- Remove console.logs before commit
-- Add comments for complex logic
-- Handle errors properly (try-catch)
-- Never commit `.env` files
-
-**Deliverable:** CODING_STANDARDS.md file
+# End-to-end tests
+pnpm test:e2e
+```
 
 ---
 
-## Week 1 Checklist
+## Roadmap
 
-**Documents:**
-- Project proposal
-- Market research report
-- PRD
-- Feature list with ownership
-- Architecture diagram
-- Database schema + ER diagram
-- Authentication flow diagram
-- Coding standards
-
-**Technical:**
-- GitHub repo with project board
-- Issues created and assigned
-- Next.js frontend initialized
-- Node.js backend initialized
-- MongoDB connection working
-- Folder structure organized
-- ESLint + Prettier configured
-- README with setup instructions
-
-**Team Clarity:**
-- Everyone knows what feature they own
-- Dependencies mapped
-- GitHub workflow understood
+- [ ] Collaborative canvas
+- [ ] Full-text search
+- [ ] Analytics dashboard
+- [ ] Mobile app
+- [ ] WebRTC peer-to-peer sync
 
 ---
 
-## Learning Resources
+## Why Collability?
 
-**Next.js:** https://nextjs.org/docs
+This project demonstrates real-world knowledge of:
 
-**Node.js + TypeScript:** https://www.typescriptlang.org/docs
+- Real-time distributed systems
+- CRDT synchronization and conflict resolution
+- Offline-first architecture
+- Scalable backend design
+- Relational data modeling
+- Modern React + Next.js application architecture
 
-**MongoDB:** https://www.mongodb.com/docs
-
-**JWT:** https://jwt.io/introduction
-
-**shadcn/ui:** https://ui.shadcn.com
-
-**GitHub Projects:** https://docs.github.com/en/issues/planning-and-tracking-with-projects
-
----
-
-## Code Quality Rules
-
-Before committing:
-- Run `npm run lint`
-- Format code with Prettier
-- Test locally
-- Write clear commit message
-- Link commit to GitHub issue
-- Never commit secrets or API keys
+It reflects how production collaborative products are actually built.
 
 ---
 
-## End of Week Review
+## License
 
-**Team Meeting Agenda:**
-1. Present all deliverables
-2. Review GitHub project board
-3. Confirm everyone understands their tasks
-4. Demo frontend and backend setup
-5. Discuss any blockers
-6. Plan Week 2 tasks
-
-**Success Criteria:**
-- All deliverables completed
-- Code pushed to GitHub
-- Project board updated
-- No confusion about responsibilities
-- Ready to start development in Week 2
-
-## Evaluation
-
-**Planning & Documentation - 40%**
-- Quality of PRD, market research, architecture
-
-**Technical Setup - 30%**
-- Frontend and backend properly initialized
-- Code structure and organization
-
-**Team Collaboration - 20%**
-- GitHub usage
-- Clear task assignments
-
-**Code Quality - 10%**
-- Coding standards followed
-- Clean repository
-
----
-
-## Important Notes
-
-- Push code daily
-- Update GitHub project board regularly
-- Ask questions immediately if stuck
-- Review each other's PRs
-- Keep documentation updated
-- Week 2 starts active development, so finish setup properly
-
-**Goal: By Friday, every team member must know exactly what they're building for the next 3 weeks.**
+MIT

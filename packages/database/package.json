@@ -1,0 +1,23 @@
+{
+    "name": "@repo/database",
+    "version": "0.0.0",
+    "private": true,
+    "main": "./dist/src/client.js",
+    "types": "./dist/src/client.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "generate": "prisma generate"
+    },
+    "dependencies": {
+        "@prisma/client": "latest",
+        "@prisma/config": "latest",
+        "dotenv": "latest"
+    },
+    "devDependencies": {
+        "@repo/config": "workspace:*",
+        "@types/node": "latest",
+        "prisma": "latest",
+        "tsx": "^4.21.0",
+        "typescript": "latest"
+    }
+}

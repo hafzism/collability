@@ -1,0 +1,20 @@
+# dependencies
+node_modules
+.pnpm-debug.log*
+
+# next.js
+.next/
+out/
+
+# nestjs
+dist/
+*.tsbuildinfo
+
+# turbo
+.turbo/
+
+# prisma
+.env
+
+# os
+.DS_Store

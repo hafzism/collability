@@ -6,8 +6,227 @@ datasource db {
   provider = "postgresql"
 }
 
+//--------------------
+// enums
+// -------------------
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  GUEST
+}
+
+enum BoardRole {
+  EDITOR
+  VIEWER
+}
+
+enum BoardVisibility {
+  WORKSPACE
+  PRIVATE
+}
+
+//--------------------
+// user
+// -------------------
+
 model User {
-  id    String  @id @default(cuid())
-  email String  @unique
-  name  String?
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  avatarUrl    String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  createdWorkspaces    Workspace[]
+  createdBoards        Board[]
+  workspaceMemberships WorkspaceMember[]
+  boardMemberships     BoardMember[]
+  cardsCreated         Card[]
+  comments             Comment[]
+  activityLogs         ActivityLog[]
+  assignedCards        CardAssignee[]
+}
+
+//--------------------
+// workspace
+// -------------------
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  creator      User              @relation(fields: [createdBy], references: [id])
+  members      WorkspaceMember[]
+  boards       Board[]
+  activityLogs ActivityLog[]
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole
+  joinedAt    DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([workspaceId, userId])
+}
+
+//--------------------
+// board
+// -------------------
+
+model Board {
+  id          String          @id @default(cuid())
+  workspaceId String
+  title       String
+  description String?
+  visibility  BoardVisibility
+  createdBy   String
+  archived    Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  creator   User      @relation(fields: [createdBy], references: [id])
+
+  lists   List[]
+  members BoardMember[]
+  labels  Label[]
+}
+
+model BoardMember {
+  id      String    @id @default(cuid())
+  boardId String
+  userId  String
+  role    BoardRole
+  addedAt DateTime  @default(now())
+
+  board Board @relation(fields: [boardId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([boardId, userId])
+}
+
+//--------------------
+// list
+// -------------------
+
+model List {
+  id        String   @id @default(cuid())
+  boardId   String
+  title     String
+  position  Float
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  board Board  @relation(fields: [boardId], references: [id])
+  cards Card[]
+}
+
+//--------------------
+// card
+// -------------------
+
+model Card {
+  id          String    @id @default(cuid())
+  listId      String
+  title       String
+  description String?
+  position    Float
+  dueDate     DateTime?
+  createdBy   String
+  archived    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  list    List @relation(fields: [listId], references: [id])
+  creator User @relation(fields: [createdBy], references: [id])
+
+  assignees CardAssignee[]
+  labels    CardLabel[]
+  comments  Comment[]
+}
+
+model CardAssignee {
+  id         String   @id @default(cuid())
+  cardId     String
+  userId     String
+  assignedAt DateTime @default(now())
+
+  card Card @relation(fields: [cardId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([cardId, userId])
+}
+
+//--------------------
+// label
+// -------------------
+
+model Label {
+  id        String   @id @default(cuid())
+  boardId   String
+  name      String
+  color     String
+  createdAt DateTime @default(now())
+
+  board Board @relation(fields: [boardId], references: [id])
+
+  cards CardLabel[]
+}
+
+model CardLabel {
+  id      String @id @default(cuid())
+  cardId  String
+  labelId String
+
+  card  Card  @relation(fields: [cardId], references: [id])
+  label Label @relation(fields: [labelId], references: [id])
+
+  @@unique([cardId, labelId])
+}
+
+//--------------------
+// comment
+// -------------------
+
+model Comment {
+  id        String   @id @default(cuid())
+  cardId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  card Card @relation(fields: [cardId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+}
+
+//--------------------
+// activity log
+// -------------------
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  entityType  String
+  entityId    String
+  action      String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
 }

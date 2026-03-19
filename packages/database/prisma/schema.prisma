@@ -6,8 +6,94 @@ datasource db {
   provider = "postgresql"
 }
 
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  GUEST
+}
+
+enum BoardRole {
+  EDITOR
+  VIEWER
+}
+
+enum BoardVisibility {
+  WORKSPACE
+  PRIVATE
+}
+
 model User {
-  id    String  @id @default(cuid())
-  email String  @unique
-  name  String?
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaces   WorkspaceMember[]
+  boards       BoardMember[]
+  cardsCreated Card[]
+  comments     Comment[]
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  creator User @relation(fields: [createdBy], references: [id])
+  members WorkspaceMember[]
+  boards Board[]
+}
+
+model WorkspaceMember{
+  id String @id @default(cuid())
+  workspaceId String
+  userId String
+  role WorkspaceRole @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+}
+
+
+model Board {
+  id          String   @id @default(cuid())
+  workspaceId String
+  title       String
+  description String?
+  visibility
+  createdBy   String
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model List {
+  id        String   @id @default(cuid())
+  boardId   String
+  title     String
+  position  BigInt
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Card {
+  id          String    @id @default(cuid())
+  listId      String
+  title       String
+  description String?
+  position    BigInt
+  dueDate     DateTime?
+  createdBy   String
+  archived    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }

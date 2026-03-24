@@ -4,6 +4,8 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { UserEntity } from '../users/entities/user.entity';
+import { plainToInstance } from 'class-transformer';
 
 @Injectable()
 export class AuthService {
@@ -27,8 +29,7 @@ export class AuthService {
       passwordHash,
     });
 
-    const { passwordHash: _, ...result } = user;
-    return result;
+    return plainToInstance(UserEntity, user);
   }
 
   async validateUser(email: string, pass: string): Promise<any> {
@@ -42,8 +43,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const { passwordHash: _, ...result } = user;
-    return result;
+    return plainToInstance(UserEntity, user);
   }
 
   async login(loginDto: LoginDto) {

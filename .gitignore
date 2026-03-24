@@ -20,4 +20,7 @@ dist/
 .DS_Store
 
 # http
-demo.http
+# demo.http
+
+# docs
+NESTJS_MASTERCLASS.md

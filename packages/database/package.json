@@ -9,14 +9,17 @@
         "generate": "prisma generate"
     },
     "dependencies": {
-        "@prisma/client": "latest",
-        "@prisma/config": "latest",
-        "dotenv": "latest"
+        "@prisma/adapter-pg": "^7.5.0",
+        "@prisma/client": "^7.5.0",
+        "@prisma/config": "^7.5.0",
+        "dotenv": "latest",
+        "pg": "^8.20.0"
     },
     "devDependencies": {
         "@repo/config": "workspace:*",
         "@types/node": "latest",
-        "prisma": "latest",
+        "@types/pg": "^8.11.11",
+        "prisma": "^7.5.0",
         "tsx": "^4.21.0",
         "typescript": "latest"
     }

@@ -18,3 +18,9 @@ dist/
 
 # os
 .DS_Store
+
+# http
+# demo.http
+
+# docs
+NESTJS_MASTERCLASS.md

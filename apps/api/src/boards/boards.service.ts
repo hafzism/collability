@@ -72,4 +72,48 @@ export class BoardsService {
       },
     });
   }
+
+  async createBoard(workspaceId: string, userId: string, title: string, description?: string, visibility: 'WORKSPACE' | 'PRIVATE' = 'WORKSPACE'): Promise<Board> {
+    return this.prisma.board.create({
+      data: {
+        workspaceId,
+        createdBy: userId,
+        title,
+        description,
+        visibility,
+        members: {
+          create: {
+            userId,
+            role: 'EDITOR'
+          }
+        }
+      }
+    });
+  }
+
+  async findWorkspaceBoards(workspaceId: string, userId: string, includeArchived = false): Promise<Board[]> {
+    return this.prisma.board.findMany({
+      where: {
+        workspaceId,
+        archived: includeArchived ? undefined : false,
+        OR: [
+          { visibility: 'WORKSPACE' },
+          { members: { some: { userId } } }
+        ]
+      }
+    });
+  }
+
+  async updateBoard(boardId: string, data: Partial<Pick<Board, 'title' | 'description' | 'visibility' | 'archived'>>): Promise<Board> {
+    return this.prisma.board.update({
+      where: { id: boardId },
+      data,
+    });
+  }
+
+  async deleteBoard(boardId: string): Promise<Board> {
+    return this.prisma.board.delete({
+      where: { id: boardId },
+    });
+  }
 }

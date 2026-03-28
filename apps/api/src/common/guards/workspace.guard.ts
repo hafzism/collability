@@ -29,7 +29,7 @@ export class WorkspaceGuard implements CanActivate {
       throw new ForbiddenException('You are not a member of this workspace');
     }
 
-    request.workspaceMembership = membership;
+    request.workspaceId = workspaceId;
     request.workspaceRole = membership.role as WorkspaceRole;
 
     return true;

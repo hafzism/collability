@@ -28,12 +28,16 @@ export class ListsController {
     @Req() req: AuthenticatedRequest,
     @Param('boardId') boardId: string,
     @Query('includeArchived') includeArchived?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
     const include = includeArchived === 'true';
+    const take = limit ? parseInt(limit) : 50;
+    const skip = offset ? parseInt(offset) : 0;
     if (include && req.workspaceRole !== WorkspaceRole.OWNER && req.workspaceRole !== WorkspaceRole.ADMIN) {
-       return this.listsService.getBoardLists(boardId, false);
+       return this.listsService.getBoardLists(boardId, false, take, skip);
     }
-    return this.listsService.getBoardLists(boardId, include);
+    return this.listsService.getBoardLists(boardId, include, take, skip);
   }
 
   @Patch(':listId')

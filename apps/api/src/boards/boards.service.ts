@@ -2,6 +2,9 @@ import { Injectable, ConflictException, NotFoundException, ForbiddenException } 
 import { PrismaService } from '../prisma/prisma.service';
 import { Board, BoardMember } from '@repo/database';
 import { BoardRole } from '../common/enums/board-role.enum';
+import sanitizeHtml from 'sanitize-html';
+
+const sanitize = (value: string) => sanitizeHtml(value, { allowedTags: [], allowedAttributes: {} });
 
 @Injectable()
 export class BoardsService {
@@ -91,8 +94,8 @@ export class BoardsService {
       data: {
         workspaceId,
         createdBy: userId,
-        title,
-        description,
+        title: sanitize(title),
+        description: description ? sanitize(description) : undefined,
         visibility,
         members: {
           create: {
@@ -104,7 +107,7 @@ export class BoardsService {
     });
   }
 
-  async findWorkspaceBoards(workspaceId: string, userId: string, includeArchived = false): Promise<Board[]> {
+  async findWorkspaceBoards(workspaceId: string, userId: string, includeArchived = false, limit = 50, offset = 0): Promise<Board[]> {
     return this.prisma.board.findMany({
       where: {
         workspaceId,
@@ -113,11 +116,16 @@ export class BoardsService {
           { visibility: 'WORKSPACE' },
           { members: { some: { userId } } }
         ]
-      }
+      },
+      take: limit,
+      skip: offset,
     });
   }
 
   async updateBoard(boardId: string, data: Partial<Pick<Board, 'title' | 'description' | 'visibility' | 'archived'>>): Promise<Board> {
+    if (data.title) data.title = sanitize(data.title);
+    if (data.description) data.description = sanitize(data.description);
+    
     return this.prisma.board.update({
       where: { id: boardId },
       data,

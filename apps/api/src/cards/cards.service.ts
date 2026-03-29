@@ -24,7 +24,7 @@ export class CardsService {
     return list;
   }
 
-  async createCard(boardId: string, listId: string, userId: string, data: { title: string; description?: string; position: number; dueDate?: string | Date }): Promise<Card> {
+  async createCard(boardId: string, listId: string, userId: string, data: { title: string; description?: string; position: bigint; dueDate?: string | Date }): Promise<Card> {
     await this.validateListBoardAccess(listId, boardId);
 
     const dueDate = data.dueDate ? new Date(data.dueDate) : undefined;

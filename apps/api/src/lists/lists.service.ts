@@ -40,7 +40,7 @@ export class ListsService {
     });
   }
 
-  async updateList(boardId: string, listId: string, data: Partial<Pick<List, 'title' | 'position' | 'archived'>>): Promise<List> {
+  async updateList(boardId: string, listId: string, data: { title?: string; position?: bigint; archived?: boolean }): Promise<List> {
     const list = await this.prisma.list.findFirst({
       where: { id: listId, boardId },
     });

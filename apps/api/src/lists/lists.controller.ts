@@ -20,7 +20,7 @@ export class ListsController {
     @Param('boardId') boardId: string,
     @Body() dto: CreateListDto,
   ) {
-    return this.listsService.createList(boardId, dto.title, dto.position);
+    return this.listsService.createList(boardId, dto.title, BigInt(dto.position));
   }
 
   @Get()
@@ -43,7 +43,11 @@ export class ListsController {
     @Param('listId') listId: string,
     @Body() dto: UpdateListDto,
   ) {
-    return this.listsService.updateList(boardId, listId, dto);
+    const { position, ...rest } = dto;
+    return this.listsService.updateList(boardId, listId, {
+      ...rest,
+      ...(position !== undefined && { position: BigInt(position) }),
+    });
   }
 
   @Delete(':listId')

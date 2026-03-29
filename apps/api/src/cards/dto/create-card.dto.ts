@@ -1,4 +1,4 @@
-import { IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateCardDto {
   @IsString()
@@ -9,8 +9,10 @@ export class CreateCardDto {
   @IsOptional()
   description?: string;
 
-  @IsNumber()
-  position!: number;
+  // BigInt position sent as string from client (e.g. "65536")
+  @IsString()
+  @IsNotEmpty()
+  position!: string;
 
   @IsDateString()
   @IsOptional()

@@ -22,7 +22,10 @@ export class CardsController {
     @Param('listId') listId: string,
     @Body() dto: CreateCardDto,
   ) {
-    return this.cardsService.createCard(boardId, listId, req.user.id, dto);
+    return this.cardsService.createCard(boardId, listId, req.user.id, {
+      ...dto,
+      position: BigInt(dto.position) as any,
+    });
   }
 
   @Get()

@@ -29,17 +29,26 @@ export class WorkspacesService {
   }
 
   async addMember(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMember> {
-    const existing = await this.getWorkspaceMembership(userId, workspaceId);
-    if (existing) {
-      throw new ConflictException('User is already a member of this workspace');
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.workspaceMember.findUnique({
+        where: {
+          workspaceId_userId: {
+            workspaceId,
+            userId,
+          },
+        },
+      });
+      if (existing) {
+        throw new ConflictException('User is already a member of this workspace');
+      }
 
-    return this.prisma.workspaceMember.create({
-      data: {
-        workspaceId,
-        userId,
-        role,
-      },
+      return tx.workspaceMember.create({
+        data: {
+          workspaceId,
+          userId,
+          role,
+        },
+      });
     });
   }
 

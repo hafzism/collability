@@ -25,35 +25,48 @@ export class BoardsService {
   }
 
   async addMember(boardId: string, userId: string, role: BoardRole): Promise<BoardMember> {
-    const board = await this.getBoardById(boardId);
-    if (!board) {
-      throw new NotFoundException('Board not found');
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const board = await tx.board.findUnique({
+        where: { id: boardId }
+      });
+      
+      if (!board) {
+        throw new NotFoundException('Board not found');
+      }
 
-    const workspaceMembership = await this.prisma.workspaceMember.findUnique({
-      where: {
-        workspaceId_userId: {
-          workspaceId: board.workspaceId,
-          userId,
+      const workspaceMembership = await tx.workspaceMember.findUnique({
+        where: {
+          workspaceId_userId: {
+            workspaceId: board.workspaceId,
+            userId,
+          },
         },
-      },
-    });
+      });
 
-    if (!workspaceMembership) {
-      throw new ForbiddenException('User must be a member of the workspace to be added to the board');
-    }
+      if (!workspaceMembership) {
+        throw new ForbiddenException('User must be a member of the workspace to be added to the board');
+      }
 
-    const existing = await this.getBoardMembership(userId, boardId);
-    if (existing) {
-      throw new ConflictException('User is already a member of this board');
-    }
+      const existing = await tx.boardMember.findUnique({
+        where: {
+          boardId_userId: {
+            boardId,
+            userId,
+          },
+        },
+      });
+      
+      if (existing) {
+        throw new ConflictException('User is already a member of this board');
+      }
 
-    return this.prisma.boardMember.create({
-      data: {
-        boardId,
-        userId,
-        role,
-      },
+      return tx.boardMember.create({
+        data: {
+          boardId,
+          userId,
+          role,
+        },
+      });
     });
   }
 
@@ -112,8 +125,9 @@ export class BoardsService {
   }
 
   async deleteBoard(boardId: string): Promise<Board> {
-    return this.prisma.board.delete({
+    return this.prisma.board.update({
       where: { id: boardId },
+      data: { archived: true },
     });
   }
 }

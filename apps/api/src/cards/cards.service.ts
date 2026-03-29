@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Card } from '@repo/database';
+import sanitizeHtml from 'sanitize-html';
+
+const sanitize = (value: string) => sanitizeHtml(value, { allowedTags: [], allowedAttributes: {} });
 
 @Injectable()
 export class CardsService {
@@ -30,15 +33,15 @@ export class CardsService {
       data: {
         listId,
         createdBy: userId,
-        title: data.title,
-        description: data.description,
+        title: sanitize(data.title),
+        description: data.description ? sanitize(data.description) : undefined,
         position: data.position,
         dueDate,
       },
     });
   }
 
-  async getListCards(boardId: string, listId: string, includeArchived = false): Promise<Card[]> {
+  async getListCards(boardId: string, listId: string, includeArchived = false, limit = 50, offset = 0): Promise<Card[]> {
     return this.prisma.card.findMany({
       where: {
         listId,
@@ -48,6 +51,8 @@ export class CardsService {
         archived: includeArchived ? undefined : false,
       },
       orderBy: { position: 'asc' },
+      take: limit,
+      skip: offset,
     });
   }
 
@@ -68,6 +73,9 @@ export class CardsService {
 
     if (!card) throw new NotFoundException('Card not found');
 
+    if (data.title) data = { ...data, title: sanitize(data.title) };
+    if (data.description) data = { ...data, description: sanitize(data.description) };
+
     return this.prisma.card.update({
       where: { id: cardId },
       data,
@@ -85,8 +93,9 @@ export class CardsService {
 
     if (!card) throw new NotFoundException('Card not found');
 
-    return this.prisma.card.delete({
+    return this.prisma.card.update({
       where: { id: cardId },
+      data: { archived: true },
     });
   }
 }

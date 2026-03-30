@@ -1,4 +1,4 @@
-import { IsBoolean, IsDateString, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsDateString, IsOptional, IsString } from 'class-validator';
 
 export class UpdateCardDto {
   @IsString()
@@ -9,9 +9,10 @@ export class UpdateCardDto {
   @IsOptional()
   description?: string;
 
-  @IsNumber()
+  // BigInt position sent as string from client (e.g. "65536")
+  @IsString()
   @IsOptional()
-  position?: number;
+  position?: string;
 
   @IsDateString()
   @IsOptional()
@@ -19,7 +20,7 @@ export class UpdateCardDto {
 
   @IsString()
   @IsOptional()
-  listId?: string; 
+  listId?: string;
 
   @IsBoolean()
   @IsOptional()

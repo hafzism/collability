@@ -22,7 +22,10 @@ export class CardsController {
     @Param('listId') listId: string,
     @Body() dto: CreateCardDto,
   ) {
-    return this.cardsService.createCard(boardId, listId, req.user.id, dto);
+    return this.cardsService.createCard(boardId, listId, req.user.id, {
+      ...dto,
+      position: BigInt(dto.position),
+    });
   }
 
   @Get()
@@ -31,12 +34,16 @@ export class CardsController {
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,
     @Query('includeArchived') includeArchived?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
     const include = includeArchived === 'true';
+    const take = limit ? parseInt(limit) : 50;
+    const skip = offset ? parseInt(offset) : 0;
     if (include && req.workspaceRole !== WorkspaceRole.OWNER && req.workspaceRole !== WorkspaceRole.ADMIN) {
-       return this.cardsService.getListCards(boardId, listId, false);
+       return this.cardsService.getListCards(boardId, listId, false, take, skip);
     }
-    return this.cardsService.getListCards(boardId, listId, include);
+    return this.cardsService.getListCards(boardId, listId, include, take, skip);
   }
 
   @Patch(':cardId')

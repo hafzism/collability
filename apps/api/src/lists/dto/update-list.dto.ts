@@ -1,13 +1,14 @@
-import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
 export class UpdateListDto {
   @IsString()
   @IsOptional()
   title?: string;
 
-  @IsNumber()
+  // BigInt position sent as string from client (e.g. "65536")
+  @IsString()
   @IsOptional()
-  position?: number;
+  position?: string;
 
   @IsBoolean()
   @IsOptional()

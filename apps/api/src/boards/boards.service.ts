@@ -2,6 +2,9 @@ import { Injectable, ConflictException, NotFoundException, ForbiddenException } 
 import { PrismaService } from '../prisma/prisma.service';
 import { Board, BoardMember } from '@repo/database';
 import { BoardRole } from '../common/enums/board-role.enum';
+import sanitizeHtml from 'sanitize-html';
+
+const sanitize = (value: string) => sanitizeHtml(value, { allowedTags: [], allowedAttributes: {} });
 
 @Injectable()
 export class BoardsService {
@@ -25,35 +28,48 @@ export class BoardsService {
   }
 
   async addMember(boardId: string, userId: string, role: BoardRole): Promise<BoardMember> {
-    const board = await this.getBoardById(boardId);
-    if (!board) {
-      throw new NotFoundException('Board not found');
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const board = await tx.board.findUnique({
+        where: { id: boardId }
+      });
+      
+      if (!board) {
+        throw new NotFoundException('Board not found');
+      }
 
-    const workspaceMembership = await this.prisma.workspaceMember.findUnique({
-      where: {
-        workspaceId_userId: {
-          workspaceId: board.workspaceId,
-          userId,
+      const workspaceMembership = await tx.workspaceMember.findUnique({
+        where: {
+          workspaceId_userId: {
+            workspaceId: board.workspaceId,
+            userId,
+          },
         },
-      },
-    });
+      });
 
-    if (!workspaceMembership) {
-      throw new ForbiddenException('User must be a member of the workspace to be added to the board');
-    }
+      if (!workspaceMembership) {
+        throw new ForbiddenException('User must be a member of the workspace to be added to the board');
+      }
 
-    const existing = await this.getBoardMembership(userId, boardId);
-    if (existing) {
-      throw new ConflictException('User is already a member of this board');
-    }
+      const existing = await tx.boardMember.findUnique({
+        where: {
+          boardId_userId: {
+            boardId,
+            userId,
+          },
+        },
+      });
+      
+      if (existing) {
+        throw new ConflictException('User is already a member of this board');
+      }
 
-    return this.prisma.boardMember.create({
-      data: {
-        boardId,
-        userId,
-        role,
-      },
+      return tx.boardMember.create({
+        data: {
+          boardId,
+          userId,
+          role,
+        },
+      });
     });
   }
 
@@ -78,8 +94,8 @@ export class BoardsService {
       data: {
         workspaceId,
         createdBy: userId,
-        title,
-        description,
+        title: sanitize(title),
+        description: description ? sanitize(description) : undefined,
         visibility,
         members: {
           create: {
@@ -91,7 +107,7 @@ export class BoardsService {
     });
   }
 
-  async findWorkspaceBoards(workspaceId: string, userId: string, includeArchived = false): Promise<Board[]> {
+  async findWorkspaceBoards(workspaceId: string, userId: string, includeArchived = false, limit = 50, offset = 0): Promise<Board[]> {
     return this.prisma.board.findMany({
       where: {
         workspaceId,
@@ -100,11 +116,16 @@ export class BoardsService {
           { visibility: 'WORKSPACE' },
           { members: { some: { userId } } }
         ]
-      }
+      },
+      take: limit,
+      skip: offset,
     });
   }
 
   async updateBoard(boardId: string, data: Partial<Pick<Board, 'title' | 'description' | 'visibility' | 'archived'>>): Promise<Board> {
+    if (data.title) data.title = sanitize(data.title);
+    if (data.description) data.description = sanitize(data.description);
+    
     return this.prisma.board.update({
       where: { id: boardId },
       data,
@@ -112,8 +133,9 @@ export class BoardsService {
   }
 
   async deleteBoard(boardId: string): Promise<Board> {
-    return this.prisma.board.delete({
+    return this.prisma.board.update({
       where: { id: boardId },
+      data: { archived: true },
     });
   }
 }

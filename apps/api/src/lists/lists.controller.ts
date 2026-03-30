@@ -20,7 +20,7 @@ export class ListsController {
     @Param('boardId') boardId: string,
     @Body() dto: CreateListDto,
   ) {
-    return this.listsService.createList(boardId, dto.title, dto.position);
+    return this.listsService.createList(boardId, dto.title, BigInt(dto.position));
   }
 
   @Get()
@@ -28,12 +28,16 @@ export class ListsController {
     @Req() req: AuthenticatedRequest,
     @Param('boardId') boardId: string,
     @Query('includeArchived') includeArchived?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
     const include = includeArchived === 'true';
+    const take = limit ? parseInt(limit) : 50;
+    const skip = offset ? parseInt(offset) : 0;
     if (include && req.workspaceRole !== WorkspaceRole.OWNER && req.workspaceRole !== WorkspaceRole.ADMIN) {
-       return this.listsService.getBoardLists(boardId, false);
+       return this.listsService.getBoardLists(boardId, false, take, skip);
     }
-    return this.listsService.getBoardLists(boardId, include);
+    return this.listsService.getBoardLists(boardId, include, take, skip);
   }
 
   @Patch(':listId')
@@ -43,7 +47,11 @@ export class ListsController {
     @Param('listId') listId: string,
     @Body() dto: UpdateListDto,
   ) {
-    return this.listsService.updateList(boardId, listId, dto);
+    const { position, ...rest } = dto;
+    return this.listsService.updateList(boardId, listId, {
+      ...rest,
+      ...(position !== undefined && { position: BigInt(position) }),
+    });
   }
 
   @Delete(':listId')

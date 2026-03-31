@@ -2,6 +2,7 @@ import { Controller, Post, Get, Patch, Delete, Param, Body, UseGuards, HttpCode,
 import { ListsService } from './lists.service';
 import { CreateListDto } from './dto/create-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
+import { ReorderListDto } from './dto/reorder-list.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BoardGuard } from '../common/guards/board.guard';
 import { RequireBoardRole } from '../common/decorators/require-board-role.decorator';
@@ -20,7 +21,7 @@ export class ListsController {
     @Param('boardId') boardId: string,
     @Body() dto: CreateListDto,
   ) {
-    return this.listsService.createList(boardId, dto.title, BigInt(dto.position));
+    return this.listsService.createList(boardId, dto.title);
   }
 
   @Get()
@@ -47,11 +48,17 @@ export class ListsController {
     @Param('listId') listId: string,
     @Body() dto: UpdateListDto,
   ) {
-    const { position, ...rest } = dto;
-    return this.listsService.updateList(boardId, listId, {
-      ...rest,
-      ...(position !== undefined && { position: BigInt(position) }),
-    });
+    return this.listsService.updateList(boardId, listId, dto);
+  }
+
+  @Patch(':listId/reorder')
+  @RequireBoardRole(BoardRole.EDITOR)
+  async reorderList(
+    @Param('boardId') boardId: string,
+    @Param('listId') listId: string,
+    @Body() dto: ReorderListDto,
+  ) {
+    return this.listsService.reorderList(boardId, listId, dto.beforeId, dto.afterId);
   }
 
   @Delete(':listId')

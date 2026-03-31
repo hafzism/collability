@@ -9,18 +9,9 @@ export class UpdateCardDto {
   @IsOptional()
   description?: string;
 
-  // BigInt position sent as string from client (e.g. "65536")
-  @IsString()
-  @IsOptional()
-  position?: string;
-
   @IsDateString()
   @IsOptional()
   dueDate?: string;
-
-  @IsString()
-  @IsOptional()
-  listId?: string;
 
   @IsBoolean()
   @IsOptional()

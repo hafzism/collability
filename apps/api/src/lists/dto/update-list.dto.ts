@@ -5,11 +5,6 @@ export class UpdateListDto {
   @IsOptional()
   title?: string;
 
-  // BigInt position sent as string from client (e.g. "65536")
-  @IsString()
-  @IsOptional()
-  position?: string;
-
   @IsBoolean()
   @IsOptional()
   archived?: boolean;

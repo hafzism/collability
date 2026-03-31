@@ -2,6 +2,8 @@ import { Controller, Post, Get, Patch, Delete, Param, Body, UseGuards, HttpCode,
 import { CardsService } from './cards.service';
 import { CreateCardDto } from './dto/create-card.dto';
 import { UpdateCardDto } from './dto/update-card.dto';
+import { ReorderCardDto } from './dto/reorder-card.dto';
+import { MoveCardDto } from './dto/move-card.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BoardGuard } from '../common/guards/board.guard';
 import { RequireBoardRole } from '../common/decorators/require-board-role.decorator';
@@ -24,7 +26,6 @@ export class CardsController {
   ) {
     return this.cardsService.createCard(boardId, listId, req.user.id, {
       ...dto,
-      position: BigInt(dto.position),
     });
   }
 
@@ -61,6 +62,28 @@ export class CardsController {
     }
     
     return this.cardsService.updateCard(boardId, listId, cardId, updateData);
+  }
+
+  @Patch(':cardId/reorder')
+  @RequireBoardRole(BoardRole.EDITOR)
+  async reorderCard(
+    @Param('boardId') boardId: string,
+    @Param('listId') listId: string,
+    @Param('cardId') cardId: string,
+    @Body() dto: ReorderCardDto,
+  ) {
+    return this.cardsService.reorderCard(boardId, listId, cardId, dto.beforeId, dto.afterId);
+  }
+
+  @Patch(':cardId/move')
+  @RequireBoardRole(BoardRole.EDITOR)
+  async moveCard(
+    @Param('boardId') boardId: string,
+    @Param('listId') listId: string,
+    @Param('cardId') cardId: string,
+    @Body() dto: MoveCardDto,
+  ) {
+    return this.cardsService.moveCard(boardId, listId, cardId, dto.targetListId, dto.beforeId, dto.afterId);
   }
 
   @Delete(':cardId')

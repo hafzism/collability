@@ -9,11 +9,6 @@ export class CreateCardDto {
   @IsOptional()
   description?: string;
 
-  // BigInt position sent as string from client (e.g. "65536")
-  @IsString()
-  @IsNotEmpty()
-  position!: string;
-
   @IsDateString()
   @IsOptional()
   dueDate?: string;

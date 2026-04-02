@@ -16,7 +16,7 @@ function HeroEmailCaptureForm() {
       transition={{ duration: 0.3, delay: 0.3 }}
       onSubmit={(event) => {
         event.preventDefault();
-        window.location.href = "/register";
+        window.location.href = "/signup";
       }}
     >
       <input
@@ -25,9 +25,13 @@ function HeroEmailCaptureForm() {
         required
         className="h-12 w-full flex-1 rounded-xl border border-white/10 bg-white/5 px-5 text-[16px] text-white outline-none transition-all placeholder:text-muted-foreground focus:border-white/20 focus:ring-1 focus:ring-white/20 backdrop-blur-sm"
       />
-      <Button type="submit" size="lg" className="w-full shrink-0 px-5 sm:w-auto">
+      <Button
+        type="submit"
+        size="lg"
+        className="w-full shrink-0 px-5 sm:w-auto"
+      >
         <span className="group flex flex-row items-center gap-2">
-          <span>Try for free</span>
+          <span>Get Started</span>
           <ChevronRight className="ml-1 size-4 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />
         </span>
       </Button>

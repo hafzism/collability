@@ -55,7 +55,10 @@ function MobileNavIcon({ open }: { open: boolean }) {
       />
       <path
         d="M2 2L12 12M12 2L2 12"
-        className={cn("origin-center transition", !open && "scale-90 opacity-0")}
+        className={cn(
+          "origin-center transition",
+          !open && "scale-90 opacity-0",
+        )}
       />
     </svg>
   );
@@ -132,7 +135,7 @@ function MobileNavigation() {
                 <hr className="m-2 border-border" />
 
                 <MobileNavLink href="/login">Sign In</MobileNavLink>
-                <MobileNavLink href="/register">
+                <MobileNavLink href="/signup">
                   <Button className="w-full" asChild>
                     <div className="group relative mx-auto flex w-full max-w-fit flex-row items-center justify-center rounded-2xl text-sm font-medium">
                       <span>Get Started</span>
@@ -181,7 +184,7 @@ export function SiteHeader() {
             </Button>
 
             <Button className="max-md:hidden" asChild>
-              <Link href="/register" aria-label="Get Started">
+              <Link href="/signup" aria-label="Get Started">
                 <div className="group relative mx-auto flex w-full max-w-fit flex-row items-center justify-center text-sm font-medium">
                   <span>Get Started</span>
                   <ChevronRight className="ml-1 size-4 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />

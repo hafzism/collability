@@ -42,7 +42,7 @@ export function CallToActionSection() {
 
           <div className="mt-10 flex flex-col items-center justify-center gap-6 sm:flex-row">
             <Button className="w-full px-8 py-3 text-base sm:w-auto" asChild>
-              <Link href="/register">Get Started for Free</Link>
+              <Link href="/signup">Get Started for Free</Link>
             </Button>
           </div>
         </div>

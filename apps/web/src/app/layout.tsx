@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Lexend } from "next/font/google";
 
-import { SiteHeader } from "@/components/navigation/site-header";
+import { AppChrome } from "@/components/layout/app-chrome";
 import { siteMetadata } from "@/constants/site";
 
 import "./globals.css";
@@ -34,10 +34,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`dark scroll-smooth antialiased ${inter.variable} ${lexend.variable}`}>
+    <html
+      lang="en"
+      className={`dark scroll-smooth antialiased ${inter.variable} ${lexend.variable}`}
+    >
       <body className="flex min-h-screen flex-col font-sans">
-        <SiteHeader />
-        <main className="flex-1">{children}</main>
+        <AppChrome>{children}</AppChrome>
       </body>
     </html>
   );

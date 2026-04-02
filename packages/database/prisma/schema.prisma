@@ -50,6 +50,19 @@ model User {
   assignedCards        CardAssignee[]
 }
 
+model EmailOtpVerification {
+  id         String   @id @default(cuid())
+  email      String
+  codeHash   String
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  attempts   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([email, createdAt])
+}
+
 //--------------------
 // workspace
 // -------------------

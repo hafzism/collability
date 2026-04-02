@@ -43,7 +43,14 @@ export class AuthService {
       passwordHash,
     });
 
-    return plainToInstance(UserEntity, user);
+    const userEntity = plainToInstance(UserEntity, user);
+    const payload = { email: userEntity.email, sub: userEntity.id };
+    const accessToken = this.jwtService.sign(payload);
+
+    return {
+      accessToken,
+      user: userEntity,
+    };
   }
 
   async requestOtp(requestOtpDto: RequestOtpDto) {
@@ -143,8 +150,9 @@ export class AuthService {
     const user = await this.validateUser(loginDto.email, loginDto.password);
 
     const payload = { email: user.email, sub: user.id };
+    const accessToken = this.jwtService.sign(payload);
     return {
-      access_token: this.jwtService.sign(payload),
+      accessToken,
       user,
     };
   }

@@ -125,7 +125,7 @@ describe('AuthService OTP signup flow', () => {
   });
 
   it('creates a user when the verification token is valid and verified', async () => {
-    usersService.findByEmail.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    usersService.findByEmail.mockResolvedValueOnce(null);
     jwtService.verify.mockReturnValue({
       purpose: 'signup-email-verification',
       email: 'new@company.com',
@@ -137,6 +137,7 @@ describe('AuthService OTP signup flow', () => {
       verifiedAt: new Date(),
       expiresAt: new Date(Date.now() + 60_000),
     });
+    jwtService.sign.mockReturnValue('access-token');
     usersService.create.mockResolvedValue({
       id: 'user-1',
       email: 'new@company.com',
@@ -153,9 +154,47 @@ describe('AuthService OTP signup flow', () => {
         password: 'secret123',
         verificationToken: 'verified-token',
       } as any),
-    ).resolves.toMatchObject({
+    ).resolves.toEqual({
+      accessToken: 'access-token',
+      user: expect.objectContaining({
+        email: 'new@company.com',
+        name: 'New User',
+      }),
+    });
+
+    expect(jwtService.sign).toHaveBeenCalledWith({
+      email: 'new@company.com',
+      sub: 'user-1',
+    });
+  });
+
+  it('returns accessToken and user on successful login', async () => {
+    usersService.findByEmail.mockResolvedValue({
+      id: 'user-1',
       email: 'new@company.com',
       name: 'New User',
+      passwordHash: await bcrypt.hash('secret123', 10),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    jwtService.sign.mockReturnValue('access-token');
+
+    await expect(
+      service.login({
+        email: 'new@company.com',
+        password: 'secret123',
+      } as any),
+    ).resolves.toEqual({
+      accessToken: 'access-token',
+      user: expect.objectContaining({
+        email: 'new@company.com',
+        name: 'New User',
+      }),
+    });
+
+    expect(jwtService.sign).toHaveBeenCalledWith({
+      email: 'new@company.com',
+      sub: 'user-1',
     });
   });
 });

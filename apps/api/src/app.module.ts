@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { resolve } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -14,7 +15,13 @@ import { CardsModule } from './cards/cards.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: [
+        resolve(process.cwd(), '.env'),
+        resolve(process.cwd(), '../../.env'),
+      ],
+    }),
     ThrottlerModule.forRoot([
       {
         name: 'global',

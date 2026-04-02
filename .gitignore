@@ -24,3 +24,5 @@ dist/
 
 # docs
 NESTJS_MASTERCLASS.md
+.codex
+docs/*

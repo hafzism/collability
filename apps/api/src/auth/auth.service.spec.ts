@@ -19,6 +19,7 @@ describe('AuthService OTP signup flow', () => {
   const prismaService = {
     emailOtpVerification: {
       create: jest.fn(),
+      deleteMany: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn(),
     },
@@ -55,6 +56,7 @@ describe('AuthService OTP signup flow', () => {
 
   it('returns a success message when requesting an OTP for a new email', async () => {
     usersService.findByEmail.mockResolvedValue(null);
+    prismaService.emailOtpVerification.deleteMany.mockResolvedValue({ count: 0 });
     prismaService.emailOtpVerification.create.mockResolvedValue({ id: 'otp-1' });
     authMailerService.sendSignupOtpEmail.mockResolvedValue(undefined);
 
@@ -66,6 +68,24 @@ describe('AuthService OTP signup flow', () => {
       'new@company.com',
       expect.stringMatching(/^\d{6}$/),
     );
+  });
+
+  it('invalidates previous unverified OTPs before sending a new code', async () => {
+    usersService.findByEmail.mockResolvedValue(null);
+    prismaService.emailOtpVerification.deleteMany.mockResolvedValue({ count: 1 });
+    prismaService.emailOtpVerification.create.mockResolvedValue({ id: 'otp-2' });
+    authMailerService.sendSignupOtpEmail.mockResolvedValue(undefined);
+
+    await expect((service as any).requestOtp({ email: 'new@company.com' })).resolves.toEqual({
+      message: 'Verification code sent successfully',
+    });
+
+    expect(prismaService.emailOtpVerification.deleteMany).toHaveBeenCalledWith({
+      where: {
+        email: 'new@company.com',
+        verifiedAt: null,
+      },
+    });
   });
 
   it('rejects OTP requests for an existing user', async () => {

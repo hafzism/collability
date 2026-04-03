@@ -60,6 +60,13 @@ export class AuthService {
       throw new ConflictException('Email already in use');
     }
 
+    await this.prisma.emailOtpVerification.deleteMany({
+      where: {
+        email,
+        verifiedAt: null,
+      },
+    });
+
     const otpCode = this.generateOtpCode();
     const codeHash = await bcrypt.hash(otpCode, await bcrypt.genSalt());
     const expiresAt = new Date(Date.now() + this.getOtpExpiresMinutes() * 60_000);

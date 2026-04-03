@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   AuthCardBrand,
@@ -13,6 +14,12 @@ import {
 import { AuthInput } from "@/components/auth/auth-input";
 import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { Button } from "@/components/ui/button";
+import {
+  getErrorMessage,
+  register,
+  requestOtp,
+  verifyOtp,
+} from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 type SignupStep = "email" | "otp" | "profile";
@@ -31,6 +38,7 @@ function getBannerClassName(tone: BannerTone) {
 }
 
 export function SignupFlow() {
+  const router = useRouter();
   const [step, setStep] = useState<SignupStep>("email");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -42,6 +50,7 @@ export function SignupFlow() {
     tone: BannerTone;
     message: string;
   }>(null);
+  const [verificationToken, setVerificationToken] = useState("");
 
   const emailError =
     banner?.tone === "error" && step === "email" ? banner.message : undefined;
@@ -61,14 +70,6 @@ export function SignupFlow() {
       return;
     }
 
-    setIsSubmitting(true);
-    setBanner({
-      tone: "neutral",
-      message: "Sending your verification code...",
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 700));
-
     if (!trimmedEmail.includes("@")) {
       setBanner({
         tone: "error",
@@ -78,38 +79,68 @@ export function SignupFlow() {
       return;
     }
 
-    setStep("otp");
+    setIsSubmitting(true);
     setBanner({
-      tone: "success",
-      message: "A verification code has been sent to your inbox.",
+      tone: "neutral",
+      message: "Sending your verification code...",
     });
-    setIsSubmitting(false);
+
+    try {
+      await requestOtp(trimmedEmail.toLowerCase());
+      setEmail(trimmedEmail.toLowerCase());
+      setStep("otp");
+      setBanner({
+        tone: "success",
+        message: "A verification code has been sent to your inbox.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        message: getErrorMessage(
+          error,
+          "We couldn't send a verification code right now.",
+        ),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   async function handleVerifyOtp() {
+    if (otp.trim().length !== 6) {
+      setBanner({
+        tone: "error",
+        message: "Enter the 6-digit code to continue.",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     setBanner({
       tone: "neutral",
       message: "Verifying your code...",
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 650));
-
-    if (otp.trim().length !== 6) {
+    try {
+      const result = await verifyOtp(email.trim().toLowerCase(), otp.trim());
+      setVerificationToken(result.verificationToken);
+      setStep("profile");
+      setBanner({
+        tone: "success",
+        message:
+          "Email verified. Finish your profile to create the workspace.",
+      });
+    } catch (error) {
       setBanner({
         tone: "error",
-        message: "Enter the 6-digit code to continue.",
+        message: getErrorMessage(
+          error,
+          "We couldn't verify that code. Please try again.",
+        ),
       });
+    } finally {
       setIsSubmitting(false);
-      return;
     }
-
-    setStep("profile");
-    setBanner({
-      tone: "success",
-      message: "Email verified. Finish your profile to create the workspace.",
-    });
-    setIsSubmitting(false);
   }
 
   async function handleCreateAccount() {
@@ -139,43 +170,51 @@ export function SignupFlow() {
       return;
     }
 
+    if (!verificationToken) {
+      setBanner({
+        tone: "error",
+        message: "Verify your email before creating the account.",
+      });
+      setStep("otp");
+      return;
+    }
+
     setIsSubmitting(true);
     setBanner({
       tone: "neutral",
       message: "Creating your workspace...",
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 900));
-
-    setBanner({
-      tone: "success",
-      message: `You're all set, ${trimmedName}. Your workspace is ready.`,
-    });
-    setIsSubmitting(false);
+    try {
+      await register({
+        email: email.trim().toLowerCase(),
+        name: trimmedName,
+        password,
+        verificationToken,
+      });
+      setBanner({
+        tone: "success",
+        message: `You're all set, ${trimmedName}. Your workspace is ready.`,
+      });
+      router.replace("/dashboard");
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        message: getErrorMessage(
+          error,
+          "We couldn't create your account right now.",
+        ),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   async function handleGoogleSignup() {
-    setIsSubmitting(true);
     setBanner({
-      tone: "neutral",
-      message: "Connecting to Google...",
+      tone: "error",
+      message: "Google sign-up is coming later. Use email for now.",
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    setStep("profile");
-    if (!name) {
-      setName("Alex Morgan");
-    }
-    if (!email) {
-      setEmail("alex@collability.app");
-    }
-    setBanner({
-      tone: "success",
-      message:
-        "Google account connected. Finish the last details to create your workspace.",
-    });
-    setIsSubmitting(false);
   }
 
   return (

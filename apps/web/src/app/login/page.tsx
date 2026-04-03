@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   AuthCardBrand,
@@ -14,6 +15,7 @@ import { AuthInput } from "@/components/auth/auth-input";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { Button } from "@/components/ui/button";
+import { getErrorMessage, login } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 type FeedbackTone = "neutral" | "error" | "success";
@@ -31,6 +33,7 @@ function getFeedbackClassName(tone: FeedbackTone) {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [feedback, setFeedback] = useState<null | {
@@ -40,14 +43,6 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleLogin() {
-    setIsSubmitting(true);
-    setFeedback({
-      tone: "neutral",
-      message: "Checking your credentials...",
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
     if (!email.trim().includes("@")) {
       setFeedback({
         tone: "error",
@@ -66,37 +61,41 @@ export default function LoginPage() {
       return;
     }
 
-    if (email.includes("error")) {
-      setFeedback({
-        tone: "error",
-        message:
-          "We couldn't sign you in with those details. Please try again.",
-      });
-      setIsSubmitting(false);
-      return;
-    }
-
-    setFeedback({
-      tone: "success",
-      message: "Welcome back. Your workspace is ready.",
-    });
-    setIsSubmitting(false);
-  }
-
-  async function handleGoogleLogin() {
     setIsSubmitting(true);
     setFeedback({
       tone: "neutral",
-      message: "Connecting to Google...",
+      message: "Checking your credentials...",
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    try {
+      const result = await login({
+        email: email.trim().toLowerCase(),
+        password,
+      });
 
+      setFeedback({
+        tone: "success",
+        message: `Welcome back, ${result.user.name}. Your workspace is ready.`,
+      });
+      router.replace("/dashboard");
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        message: getErrorMessage(
+          error,
+          "We couldn't sign you in with those details. Please try again.",
+        ),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleGoogleLogin() {
     setFeedback({
-      tone: "success",
-      message: "Google account connected successfully.",
+      tone: "error",
+      message: "Google sign-in is coming later. Use email for now.",
     });
-    setIsSubmitting(false);
   }
 
   return (

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { getCurrentUser, getErrorMessage, type AuthUser } from "@/lib/auth";
 
 export default function DashboardPage() {
@@ -58,19 +59,5 @@ export default function DashboardPage() {
     );
   }
 
-  return (
-    <main className="flex min-h-screen items-center justify-center px-6">
-      <div className="text-center">
-        <p className="text-sm uppercase tracking-[0.24em] text-muted-foreground">
-          Dashboard
-        </p>
-        <h1 className="mt-4 text-4xl font-semibold text-white">
-          Welcome, {user.name}
-        </h1>
-        <p className="mt-3 text-muted-foreground">
-          This is protected dashboard text visible only to authenticated users.
-        </p>
-      </div>
-    </main>
-  );
+  return <DashboardShell userName={user.name} />;
 }

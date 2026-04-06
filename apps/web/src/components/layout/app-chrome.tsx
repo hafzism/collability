@@ -10,7 +10,9 @@ const headerlessRoutes = new Set(["/login", "/signup"]);
 
 export function AppChrome({ children }: PropsWithChildren) {
   const pathname = usePathname();
-  const showHeader = pathname ? !headerlessRoutes.has(pathname) : true;
+  const showHeader = pathname
+    ? !headerlessRoutes.has(pathname) && !pathname.startsWith("/dashboard")
+    : true;
 
   return (
     <>

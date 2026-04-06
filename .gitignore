@@ -26,3 +26,5 @@ dist/
 NESTJS_MASTERCLASS.md
 .codex
 docs/*
+
+walkthrough.md

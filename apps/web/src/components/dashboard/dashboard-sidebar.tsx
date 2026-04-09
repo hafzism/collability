@@ -60,13 +60,13 @@ export function DashboardSidebar({
   return (
     <aside
       className={cn(
-        "overflow-hidden bg-black text-[#a1a1a1] transition-[width,border-color] duration-200",
+        "shrink-0 overflow-hidden bg-black text-[#a1a1a1] transition-[width,border-color] duration-200",
         isSidebarOpen
           ? "w-[244px] border-r border-white/6"
           : "w-0 border-r border-transparent",
       )}
     >
-      <div className="flex h-full min-h-screen w-[244px] flex-col">
+      <div className="flex h-full min-h-0 w-[244px] flex-col">
         <div className="px-4 pb-4 pt-5">
           <div
             ref={workspaceMenuRef}

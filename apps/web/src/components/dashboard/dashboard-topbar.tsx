@@ -26,7 +26,7 @@ export function DashboardTopbar({
   return (
     <header
       className={cn(
-        "flex items-center justify-between gap-4 border-b border-white/6 px-4 transition-[height,padding] duration-200",
+        "flex min-w-0 items-center justify-between gap-4 px-4 transition-[height,padding] duration-200",
         isSidebarOpen ? "h-13 py-1" : "h-12 py-1",
       )}
     >
@@ -46,7 +46,7 @@ export function DashboardTopbar({
           <ChevronRight className="h-4 w-4 text-[#6f6f6f]" />
         ) : null}
 
-        <h1 className="truncate text-[17px] font-semibold tracking-[-0.02em] text-[#f5f5f3]">
+        <h1 className="truncate text-[19px] font-semibold tracking-[-0.025em] text-[#f5f5f3]">
           {boardName}
         </h1>
 

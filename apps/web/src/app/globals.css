@@ -88,3 +88,26 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    scrollbar-color: transparent transparent;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+    background: transparent;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}

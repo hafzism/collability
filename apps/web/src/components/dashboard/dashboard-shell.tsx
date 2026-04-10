@@ -191,7 +191,6 @@ export function DashboardShell({ userName }: { userName: string }) {
           activityItems={
             workspaceActivityById[workspaceDetailsWorkspace.id] ?? []
           }
-          currentUserName={userName}
           onClose={() => setWorkspaceDetailsWorkspaceId(null)}
           onDeleteWorkspace={handleDeleteWorkspace}
           onUpdateWorkspace={handleUpdateWorkspace}

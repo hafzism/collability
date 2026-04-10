@@ -74,7 +74,6 @@ export function DashboardShell({ userName }: { userName: string }) {
             setIsAccountMenuOpen((currentState) => !currentState)
           }
           onBoardSelect={setActiveBoardId}
-          onHideSidebar={() => setIsSidebarOpen(false)}
           onWorkspaceMenuToggle={() =>
             setIsWorkspaceMenuOpen((currentState) => !currentState)
           }
@@ -98,7 +97,9 @@ export function DashboardShell({ userName }: { userName: string }) {
             <DashboardTopbar
               boardName={activeBoard.name}
               isSidebarOpen={isSidebarOpen}
-              onShowSidebar={() => setIsSidebarOpen(true)}
+              onToggleSidebar={() =>
+                setIsSidebarOpen((currentState) => !currentState)
+              }
             />
 
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden">

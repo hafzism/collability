@@ -4,19 +4,37 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { CreateWorkspaceModal } from "./create-workspace-modal";
 import { DashboardKanban } from "./dashboard-kanban";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardTopbar } from "./dashboard-topbar";
-import { boardItems, workspaceItems } from "./dashboard-types";
+import { boardItems } from "./dashboard-types";
+import { WorkspaceDetailsModal } from "./workspace-details-modal";
+import type {
+  WorkspaceActivityItem,
+  WorkspaceSummary,
+} from "./workspace-types";
+
+const initialWorkspaces: WorkspaceSummary[] = [];
+const initialWorkspaceActivity: Record<string, WorkspaceActivityItem[]> = {};
 
 export function DashboardShell({ userName }: { userName: string }) {
   const [activeBoardId, setActiveBoardId] = useState(boardItems[0]?.id ?? "");
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState(
-    workspaceItems[0]?.id ?? "",
+  const [workspaces, setWorkspaces] =
+    useState<WorkspaceSummary[]>(initialWorkspaces);
+  const [workspaceActivityById, setWorkspaceActivityById] = useState<
+    Record<string, WorkspaceActivityItem[]>
+  >(initialWorkspaceActivity);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(
+    initialWorkspaces[0]?.id ?? "",
   );
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isCreateWorkspaceModalOpen, setIsCreateWorkspaceModalOpen] =
+    useState(false);
+  const [workspaceDetailsWorkspaceId, setWorkspaceDetailsWorkspaceId] =
+    useState<string | null>(null);
 
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
@@ -24,11 +42,9 @@ export function DashboardShell({ userName }: { userName: string }) {
   const activeBoard =
     boardItems.find((item) => item.id === activeBoardId) ?? boardItems[0];
   const activeWorkspace =
-    workspaceItems.find((item) => item.id === activeWorkspaceId) ??
-    workspaceItems[0] ?? {
-      id: "workspace",
-      name: userName,
-    };
+    workspaces.find((item) => item.id === activeWorkspaceId) ?? null;
+  const workspaceDetailsWorkspace =
+    workspaces.find((item) => item.id === workspaceDetailsWorkspaceId) ?? null;
   const userInitials = userName.trim().slice(0, 2).toUpperCase() || "U";
 
   useEffect(() => {
@@ -59,6 +75,53 @@ export function DashboardShell({ userName }: { userName: string }) {
     };
   }, [isAccountMenuOpen, isWorkspaceMenuOpen]);
 
+  function handleCreateWorkspace(workspace: WorkspaceSummary) {
+    setWorkspaces((current) => [...current, workspace]);
+    setWorkspaceActivityById((current) => ({
+      ...current,
+      [workspace.id]: [],
+    }));
+    setActiveWorkspaceId(workspace.id);
+    setIsCreateWorkspaceModalOpen(false);
+    setIsWorkspaceMenuOpen(false);
+  }
+
+  function handleUpdateWorkspace(
+    workspaceId: string,
+    updates: Pick<WorkspaceSummary, "name" | "slug" | "updatedAt">,
+  ) {
+    setWorkspaces((current) =>
+      current.map((workspace) =>
+        workspace.id === workspaceId ? { ...workspace, ...updates } : workspace,
+      ),
+    );
+  }
+
+  function handleDeleteWorkspace(workspaceId: string) {
+    setWorkspaces((current) => {
+      const remaining = current.filter((workspace) => workspace.id !== workspaceId);
+
+      setActiveWorkspaceId((previous) => {
+        if (previous !== workspaceId) {
+          return previous;
+        }
+
+        return remaining[0]?.id ?? "";
+      });
+
+      return remaining;
+    });
+
+    setWorkspaceActivityById((current) => {
+      const next = { ...current };
+      delete next[workspaceId];
+      return next;
+    });
+
+    setWorkspaceDetailsWorkspaceId(null);
+    setIsWorkspaceMenuOpen(false);
+  }
+
   return (
     <div className="h-screen overflow-hidden bg-[#050505] text-[#f3f3f1]">
       <div className="flex h-full">
@@ -74,6 +137,11 @@ export function DashboardShell({ userName }: { userName: string }) {
             setIsAccountMenuOpen((currentState) => !currentState)
           }
           onBoardSelect={setActiveBoardId}
+          onCreateWorkspace={() => setIsCreateWorkspaceModalOpen(true)}
+          onOpenWorkspaceDetails={(workspaceId) => {
+            setWorkspaceDetailsWorkspaceId(workspaceId);
+            setIsWorkspaceMenuOpen(false);
+          }}
           onWorkspaceMenuToggle={() =>
             setIsWorkspaceMenuOpen((currentState) => !currentState)
           }
@@ -83,7 +151,7 @@ export function DashboardShell({ userName }: { userName: string }) {
           }}
           userInitials={userInitials}
           userName={userName}
-          workspaceItems={workspaceItems}
+          workspaceItems={workspaces}
           workspaceMenuRef={workspaceMenuRef}
         />
 
@@ -108,6 +176,28 @@ export function DashboardShell({ userName }: { userName: string }) {
           </div>
         </section>
       </div>
+
+      {isCreateWorkspaceModalOpen ? (
+        <CreateWorkspaceModal
+          createdBy={userName}
+          onClose={() => setIsCreateWorkspaceModalOpen(false)}
+          onSubmit={handleCreateWorkspace}
+        />
+      ) : null}
+
+      {workspaceDetailsWorkspace ? (
+        <WorkspaceDetailsModal
+          key={workspaceDetailsWorkspace.id}
+          activityItems={
+            workspaceActivityById[workspaceDetailsWorkspace.id] ?? []
+          }
+          currentUserName={userName}
+          onClose={() => setWorkspaceDetailsWorkspaceId(null)}
+          onDeleteWorkspace={handleDeleteWorkspace}
+          onUpdateWorkspace={handleUpdateWorkspace}
+          workspace={workspaceDetailsWorkspace}
+        />
+      ) : null}
     </div>
   );
 }

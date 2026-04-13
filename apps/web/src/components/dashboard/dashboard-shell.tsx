@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { getErrorMessage, type AuthUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import {
+  createWorkspace,
+  listWorkspaces,
+} from "@/lib/workspaces";
 
 import { CreateWorkspaceModal } from "./create-workspace-modal";
 import { DashboardKanban } from "./dashboard-kanban";
@@ -18,7 +23,7 @@ import type {
 const initialWorkspaces: WorkspaceSummary[] = [];
 const initialWorkspaceActivity: Record<string, WorkspaceActivityItem[]> = {};
 
-export function DashboardShell({ userName }: { userName: string }) {
+export function DashboardShell({ user }: { user: AuthUser }) {
   const [activeBoardId, setActiveBoardId] = useState(boardItems[0]?.id ?? "");
   const [workspaces, setWorkspaces] =
     useState<WorkspaceSummary[]>(initialWorkspaces);
@@ -35,6 +40,9 @@ export function DashboardShell({ userName }: { userName: string }) {
     useState(false);
   const [workspaceDetailsWorkspaceId, setWorkspaceDetailsWorkspaceId] =
     useState<string | null>(null);
+  const [workspaceErrorMessage, setWorkspaceErrorMessage] = useState<
+    string | null
+  >(null);
 
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
@@ -45,7 +53,49 @@ export function DashboardShell({ userName }: { userName: string }) {
     workspaces.find((item) => item.id === activeWorkspaceId) ?? null;
   const workspaceDetailsWorkspace =
     workspaces.find((item) => item.id === workspaceDetailsWorkspaceId) ?? null;
-  const userInitials = userName.trim().slice(0, 2).toUpperCase() || "U";
+  const userInitials = user.name.trim().slice(0, 2).toUpperCase() || "U";
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadWorkspaces() {
+      try {
+        const loadedWorkspaces = await listWorkspaces();
+        if (!isMounted) {
+          return;
+        }
+
+        setWorkspaces(loadedWorkspaces);
+        setActiveWorkspaceId((currentActiveWorkspaceId) => {
+          if (
+            currentActiveWorkspaceId &&
+            loadedWorkspaces.some(
+              (workspace) => workspace.id === currentActiveWorkspaceId,
+            )
+          ) {
+            return currentActiveWorkspaceId;
+          }
+
+          return loadedWorkspaces[0]?.id ?? "";
+        });
+        setWorkspaceErrorMessage(null);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setWorkspaceErrorMessage(
+          getErrorMessage(error, "Unable to load your workspaces."),
+        );
+      }
+    }
+
+    void loadWorkspaces();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -75,7 +125,9 @@ export function DashboardShell({ userName }: { userName: string }) {
     };
   }, [isAccountMenuOpen, isWorkspaceMenuOpen]);
 
-  function handleCreateWorkspace(workspace: WorkspaceSummary) {
+  async function handleCreateWorkspace(values: { name: string }) {
+    const workspace = await createWorkspace(values);
+
     setWorkspaces((current) => [...current, workspace]);
     setWorkspaceActivityById((current) => ({
       ...current,
@@ -92,14 +144,18 @@ export function DashboardShell({ userName }: { userName: string }) {
   ) {
     setWorkspaces((current) =>
       current.map((workspace) =>
-        workspace.id === workspaceId ? { ...workspace, ...updates } : workspace,
+        workspace.id === workspaceId
+          ? { ...workspace, ...updates }
+          : workspace,
       ),
     );
   }
 
   function handleDeleteWorkspace(workspaceId: string) {
     setWorkspaces((current) => {
-      const remaining = current.filter((workspace) => workspace.id !== workspaceId);
+      const remaining = current.filter(
+        (workspace) => workspace.id !== workspaceId,
+      );
 
       setActiveWorkspaceId((previous) => {
         if (previous !== workspaceId) {
@@ -150,7 +206,7 @@ export function DashboardShell({ userName }: { userName: string }) {
             setIsWorkspaceMenuOpen(false);
           }}
           userInitials={userInitials}
-          userName={userName}
+          userName={user.name}
           workspaceItems={workspaces}
           workspaceMenuRef={workspaceMenuRef}
         />
@@ -171,6 +227,11 @@ export function DashboardShell({ userName }: { userName: string }) {
             />
 
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+              {workspaceErrorMessage ? (
+                <div className="border-b border-[#4c1f1a] bg-[#2a120f] px-6 py-3 text-sm text-[#f2cbc3]">
+                  {workspaceErrorMessage}
+                </div>
+              ) : null}
               <DashboardKanban activeBoardId={activeBoard.id} />
             </div>
           </div>
@@ -179,7 +240,6 @@ export function DashboardShell({ userName }: { userName: string }) {
 
       {isCreateWorkspaceModalOpen ? (
         <CreateWorkspaceModal
-          createdBy={userName}
           onClose={() => setIsCreateWorkspaceModalOpen(false)}
           onSubmit={handleCreateWorkspace}
         />

@@ -2,7 +2,6 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 
-import type { WorkspaceSummary } from "./workspace-types";
 import {
   normalizeWorkspaceName,
   slugifyWorkspaceName,
@@ -10,18 +9,17 @@ import {
 } from "./workspace-utils";
 
 type CreateWorkspaceModalProps = {
-  createdBy: string;
   onClose: () => void;
-  onSubmit: (workspace: WorkspaceSummary) => void;
+  onSubmit: (values: { name: string }) => Promise<void>;
 };
 
 export function CreateWorkspaceModal({
-  createdBy,
   onClose,
   onSubmit,
 }: CreateWorkspaceModalProps) {
   const [name, setName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const error = useMemo(() => validateWorkspaceName(name), [name]);
   const slugPreview = useMemo(() => slugifyWorkspaceName(name), [name]);
@@ -30,24 +28,25 @@ export function CreateWorkspaceModal({
     event.preventDefault();
 
     const validationError = validateWorkspaceName(name);
-
     if (validationError) {
       return;
     }
 
     setIsSubmitting(true);
+    setSubmitError(null);
 
-    const now = new Date().toISOString();
-    const normalizedName = normalizeWorkspaceName(name);
-
-    onSubmit({
-      id: crypto.randomUUID(),
-      name: normalizedName,
-      slug: slugifyWorkspaceName(normalizedName),
-      createdBy,
-      createdAt: now,
-      updatedAt: now,
-    });
+    try {
+      await onSubmit({
+        name: normalizeWorkspaceName(name),
+      });
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Unable to create workspace right now.",
+      );
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -75,11 +74,15 @@ export function CreateWorkspaceModal({
 
             {slugPreview ? (
               <p className="text-xs text-[#7f7f7a]">
-                Slug: <span className="text-[#b8b8b3]">{slugPreview}</span>
+                Backend URL slug preview:{" "}
+                <span className="text-[#b8b8b3]">{slugPreview}</span>
               </p>
             ) : null}
 
             {error ? <p className="text-xs text-[#f07f6a]">{error}</p> : null}
+            {submitError ? (
+              <p className="text-xs text-[#f07f6a]">{submitError}</p>
+            ) : null}
 
             <div className="flex items-center justify-end gap-3 pt-2">
               <button

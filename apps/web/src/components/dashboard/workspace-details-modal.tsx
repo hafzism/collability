@@ -11,18 +11,18 @@ import {
   canDeleteWorkspace,
   formatWorkspaceDate,
   normalizeWorkspaceName,
-  slugifyWorkspaceName,
   validateWorkspaceName,
 } from "./workspace-utils";
 
 type WorkspaceDetailsModalProps = {
   activityItems: WorkspaceActivityItem[];
   onClose: () => void;
-  onDeleteWorkspace: (workspaceId: string) => void;
+  onDeleteWorkspace: (workspaceId: string) => Promise<void>;
   onUpdateWorkspace: (
     workspaceId: string,
-    updates: Pick<WorkspaceSummary, "name" | "slug" | "updatedAt">,
-  ) => void;
+    updates: Pick<WorkspaceSummary, "name">,
+  ) => Promise<void>;
+  ownerLabel: string;
   workspace: WorkspaceSummary | null;
 };
 
@@ -31,34 +31,68 @@ export function WorkspaceDetailsModal({
   onClose,
   onDeleteWorkspace,
   onUpdateWorkspace,
+  ownerLabel,
   workspace,
 }: WorkspaceDetailsModalProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "activity">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "activity">(
+    "overview",
+  );
   const [name, setName] = useState(workspace?.name ?? "");
   const [isEditingName, setIsEditingName] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const error = useMemo(() => validateWorkspaceName(name), [name]);
   const normalizedName = useMemo(() => normalizeWorkspaceName(name), [name]);
-  const nextSlug = useMemo(() => slugifyWorkspaceName(name), [name]);
-  const hasChanges =
-    workspace !== null &&
-    (normalizedName !== workspace.name || nextSlug !== workspace.slug);
+  const hasChanges = workspace !== null && normalizedName !== workspace.name;
   const canDelete = canDeleteWorkspace(deleteConfirmation);
 
-  function handleSave(event: FormEvent<HTMLFormElement>) {
+  async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!workspace || error || !hasChanges) {
       return;
     }
 
-    onUpdateWorkspace(workspace.id, {
-      name: normalizedName,
-      slug: slugifyWorkspaceName(normalizedName),
-      updatedAt: new Date().toISOString(),
-    });
-    setIsEditingName(false);
+    setIsSaving(true);
+    setActionError(null);
+
+    try {
+      await onUpdateWorkspace(workspace.id, {
+        name: normalizedName,
+      });
+      setIsEditingName(false);
+    } catch (updateError) {
+      setActionError(
+        updateError instanceof Error
+          ? updateError.message
+          : "Unable to update workspace right now.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!workspace || !canDelete) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setActionError(null);
+
+    try {
+      await onDeleteWorkspace(workspace.id);
+    } catch (deleteError) {
+      setActionError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Unable to delete workspace right now.",
+      );
+      setIsDeleting(false);
+    }
   }
 
   if (!workspace) {
@@ -152,10 +186,10 @@ export function WorkspaceDetailsModal({
                         </button>
                         <button
                           type="submit"
-                          disabled={Boolean(error) || !hasChanges}
+                          disabled={Boolean(error) || !hasChanges || isSaving}
                           className="rounded-[12px] bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-[#e9e9e6] disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Save
+                          {isSaving ? "Saving..." : "Save"}
                         </button>
                       </>
                     ) : (
@@ -172,14 +206,21 @@ export function WorkspaceDetailsModal({
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <span className="text-[11px] uppercase tracking-[0.14em] text-[#72726d]">
+                  <span className="text-[10px] uppercase tracking-[0.12em] text-[#72726d]">
                     Created by
                   </span>
-                  <span>{workspace.createdBy}</span>
+                  <span>{ownerLabel}</span>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <span className="text-[11px] uppercase tracking-[0.14em] text-[#72726d]">
+                  <span className="text-[10px] uppercase tracking-[0.12em] text-[#72726d]">
+                    Slug
+                  </span>
+                  <span>{workspace.slug}</span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] uppercase tracking-[0.12em] text-[#72726d]">
                     Created at
                   </span>
                   <span>{formatWorkspaceDate(workspace.createdAt)}</span>
@@ -213,13 +254,16 @@ export function WorkspaceDetailsModal({
                 />
                 <button
                   type="button"
-                  onClick={() => onDeleteWorkspace(workspace.id)}
-                  disabled={!canDelete}
+                  onClick={handleDelete}
+                  disabled={!canDelete || isDeleting}
                   className="rounded-[14px] bg-[#c53b2f] px-4 py-3 text-sm font-medium text-white transition hover:bg-[#d24538] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Delete workspace
+                  {isDeleting ? "Deleting..." : "Delete workspace"}
                 </button>
               </div>
+              {actionError ? (
+                <p className="mt-3 text-xs text-[#f07f6a]">{actionError}</p>
+              ) : null}
             </section>
           </div>
         ) : (

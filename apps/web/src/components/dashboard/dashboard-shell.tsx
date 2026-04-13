@@ -6,7 +6,9 @@ import { getErrorMessage, type AuthUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
   createWorkspace,
+  deleteWorkspace,
   listWorkspaces,
+  updateWorkspace,
 } from "@/lib/workspaces";
 
 import { CreateWorkspaceModal } from "./create-workspace-modal";
@@ -138,20 +140,24 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     setIsWorkspaceMenuOpen(false);
   }
 
-  function handleUpdateWorkspace(
+  async function handleUpdateWorkspace(
     workspaceId: string,
-    updates: Pick<WorkspaceSummary, "name" | "slug" | "updatedAt">,
+    updates: Pick<WorkspaceSummary, "name">,
   ) {
+    const updatedWorkspace = await updateWorkspace(workspaceId, updates);
+
     setWorkspaces((current) =>
       current.map((workspace) =>
         workspace.id === workspaceId
-          ? { ...workspace, ...updates }
+          ? { ...workspace, ...updatedWorkspace }
           : workspace,
       ),
     );
   }
 
-  function handleDeleteWorkspace(workspaceId: string) {
+  async function handleDeleteWorkspace(workspaceId: string) {
+    await deleteWorkspace(workspaceId);
+
     setWorkspaces((current) => {
       const remaining = current.filter(
         (workspace) => workspace.id !== workspaceId,
@@ -254,6 +260,11 @@ export function DashboardShell({ user }: { user: AuthUser }) {
           onClose={() => setWorkspaceDetailsWorkspaceId(null)}
           onDeleteWorkspace={handleDeleteWorkspace}
           onUpdateWorkspace={handleUpdateWorkspace}
+          ownerLabel={
+            workspaceDetailsWorkspace.createdBy === user.id
+              ? user.name
+              : workspaceDetailsWorkspace.createdBy
+          }
           workspace={workspaceDetailsWorkspace}
         />
       ) : null}

@@ -5,6 +5,7 @@ export type WorkspaceSummary = {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  currentUserRole?: "OWNER" | "ADMIN" | "MEMBER" | "GUEST";
 };
 
 export type WorkspaceActivityItem = {

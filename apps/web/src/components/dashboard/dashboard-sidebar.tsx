@@ -27,6 +27,7 @@ type DashboardSidebarProps = {
   onAccountMenuToggle: () => void;
   onBoardSelect: (boardId: string) => void;
   onCreateWorkspace: () => void;
+  onJoinWorkspace: () => void;
   onOpenWorkspaceDetails: (workspaceId: string) => void;
   onWorkspaceMenuToggle: () => void;
   onWorkspaceSelect: (workspaceId: string) => void;
@@ -47,6 +48,7 @@ export function DashboardSidebar({
   onAccountMenuToggle,
   onBoardSelect,
   onCreateWorkspace,
+  onJoinWorkspace,
   onOpenWorkspaceDetails,
   onWorkspaceMenuToggle,
   onWorkspaceSelect,
@@ -78,13 +80,22 @@ export function DashboardSidebar({
           </div>
 
           {workspaceItems.length === 0 ? (
-            <button
-              type="button"
-              onClick={onCreateWorkspace}
-              className="text-left text-[13px] font-medium text-[#d6d6d3] transition hover:text-white"
-            >
-              + Create workspace
-            </button>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={onCreateWorkspace}
+                className="block text-left text-[13px] font-medium text-[#d6d6d3] transition hover:text-white"
+              >
+                + Create workspace
+              </button>
+              <button
+                type="button"
+                onClick={onJoinWorkspace}
+                className="block text-left text-[13px] font-medium text-[#9e9e99] transition hover:text-white"
+              >
+                + Join workspace
+              </button>
+            </div>
           ) : (
             <div ref={workspaceMenuRef} className="relative">
               <button
@@ -149,6 +160,14 @@ export function DashboardSidebar({
                     >
                       <Plus className="h-3.5 w-3.5" />
                       <span>Create workspace</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onJoinWorkspace}
+                      className="mt-1 flex w-full items-center gap-2 rounded-[12px] px-3 py-2.5 text-left text-[13px] text-[#b2b2b2] transition hover:bg-white/6 hover:text-[#ededeb]"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      <span>Join workspace</span>
                     </button>
                   </div>
                 </div>

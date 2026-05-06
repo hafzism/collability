@@ -47,6 +47,40 @@ export function formatWorkspaceDate(value: string) {
   }).format(date);
 }
 
+export function formatWorkspaceRole(role: string) {
+  return role.charAt(0) + role.slice(1).toLowerCase();
+}
+
+export function getAvatarFallback(name: string) {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part.charAt(0))
+      .join("")
+      .toUpperCase() || "U"
+  );
+}
+
+export function formatWorkspaceJoinCodeInput(value: string) {
+  const compactValue = value.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 9);
+
+  if (compactValue.length <= 3) {
+    return compactValue;
+  }
+
+  if (compactValue.length <= 6) {
+    return `${compactValue.slice(0, 3)}-${compactValue.slice(3)}`;
+  }
+
+  return `${compactValue.slice(0, 3)}-${compactValue.slice(3, 6)}-${compactValue.slice(6)}`;
+}
+
+export function normalizeWorkspaceJoinCode(value: string) {
+  return formatWorkspaceJoinCodeInput(value).slice(0, 11);
+}
+
 export const workspaceConstraints = {
   minNameLength: MIN_WORKSPACE_NAME_LENGTH,
   maxNameLength: MAX_WORKSPACE_NAME_LENGTH,

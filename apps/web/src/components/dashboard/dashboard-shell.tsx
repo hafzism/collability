@@ -7,8 +7,14 @@ import { cn } from "@/lib/utils";
 import {
   createWorkspace,
   deleteWorkspace,
+  getWorkspace,
+  inviteWorkspaceMember,
+  joinWorkspace,
+  leaveWorkspace,
   listWorkspaces,
+  removeWorkspaceMember,
   updateWorkspace,
+  updateWorkspaceMemberRole,
 } from "@/lib/workspaces";
 
 import { CreateWorkspaceModal } from "./create-workspace-modal";
@@ -16,9 +22,12 @@ import { DashboardKanban } from "./dashboard-kanban";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardTopbar } from "./dashboard-topbar";
 import { boardItems } from "./dashboard-types";
+import { JoinWorkspaceModal } from "./join-workspace-modal";
 import { WorkspaceDetailsModal } from "./workspace-details-modal";
 import type {
   WorkspaceActivityItem,
+  WorkspaceDetail,
+  WorkspaceInviteResponse,
   WorkspaceSummary,
 } from "./workspace-types";
 
@@ -40,8 +49,12 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isCreateWorkspaceModalOpen, setIsCreateWorkspaceModalOpen] =
     useState(false);
+  const [isJoinWorkspaceModalOpen, setIsJoinWorkspaceModalOpen] =
+    useState(false);
   const [workspaceDetailsWorkspaceId, setWorkspaceDetailsWorkspaceId] =
     useState<string | null>(null);
+  const [workspaceDetails, setWorkspaceDetails] =
+    useState<WorkspaceDetail | null>(null);
   const [workspaceErrorMessage, setWorkspaceErrorMessage] = useState<
     string | null
   >(null);
@@ -53,8 +66,6 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     boardItems.find((item) => item.id === activeBoardId) ?? boardItems[0];
   const activeWorkspace =
     workspaces.find((item) => item.id === activeWorkspaceId) ?? null;
-  const workspaceDetailsWorkspace =
-    workspaces.find((item) => item.id === workspaceDetailsWorkspaceId) ?? null;
   const userInitials = user.name.trim().slice(0, 2).toUpperCase() || "U";
 
   useEffect(() => {
@@ -100,6 +111,38 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
+    async function loadWorkspaceDetails() {
+      if (!workspaceDetailsWorkspaceId) {
+        setWorkspaceDetails(null);
+        return;
+      }
+
+      try {
+        const detail = await getWorkspace(workspaceDetailsWorkspaceId);
+        if (!isMounted) {
+          return;
+        }
+
+        setWorkspaceDetails(detail);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setWorkspaceDetails(null);
+      }
+    }
+
+    void loadWorkspaceDetails();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [workspaceDetailsWorkspaceId]);
+
+  useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
       const target = event.target as Node;
 
@@ -127,6 +170,11 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     };
   }, [isAccountMenuOpen, isWorkspaceMenuOpen]);
 
+  async function refreshWorkspaceDetails(workspaceId: string) {
+    const refreshedWorkspace = await getWorkspace(workspaceId);
+    setWorkspaceDetails(refreshedWorkspace);
+  }
+
   async function handleCreateWorkspace(values: { name: string }) {
     const workspace = await createWorkspace(values);
 
@@ -138,6 +186,20 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     setActiveWorkspaceId(workspace.id);
     setIsCreateWorkspaceModalOpen(false);
     setIsWorkspaceMenuOpen(false);
+  }
+
+  async function handleJoinWorkspace(values: { code: string }) {
+    const workspace = await joinWorkspace(values);
+
+    setWorkspaces((current) => {
+      if (current.some((item) => item.id === workspace.id)) {
+        return current.map((item) => (item.id === workspace.id ? workspace : item));
+      }
+
+      return [...current, workspace];
+    });
+    setActiveWorkspaceId(workspace.id);
+    setIsJoinWorkspaceModalOpen(false);
   }
 
   async function handleUpdateWorkspace(
@@ -152,6 +214,12 @@ export function DashboardShell({ user }: { user: AuthUser }) {
           ? { ...workspace, ...updatedWorkspace }
           : workspace,
       ),
+    );
+
+    setWorkspaceDetails((current) =>
+      current && current.id === workspaceId
+        ? { ...current, ...updatedWorkspace }
+        : current,
     );
   }
 
@@ -181,7 +249,53 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     });
 
     setWorkspaceDetailsWorkspaceId(null);
+    setWorkspaceDetails(null);
     setIsWorkspaceMenuOpen(false);
+  }
+
+  async function handleInviteWorkspaceMember(input: {
+    workspaceId: string;
+    email: string;
+  }): Promise<WorkspaceInviteResponse> {
+    return inviteWorkspaceMember(input);
+  }
+
+  async function handleUpdateWorkspaceMemberRole(input: {
+    workspaceId: string;
+    userId: string;
+    role: "ADMIN" | "MEMBER" | "GUEST";
+  }) {
+    await updateWorkspaceMemberRole(input);
+    await refreshWorkspaceDetails(input.workspaceId);
+  }
+
+  async function handleRemoveWorkspaceMember(input: {
+    workspaceId: string;
+    userId: string;
+  }) {
+    await removeWorkspaceMember(input);
+    await refreshWorkspaceDetails(input.workspaceId);
+  }
+
+  async function handleLeaveWorkspace(workspaceId: string) {
+    await leaveWorkspace(workspaceId);
+
+    setWorkspaces((current) => {
+      const remaining = current.filter((workspace) => workspace.id !== workspaceId);
+
+      setActiveWorkspaceId((previous) => {
+        if (previous !== workspaceId) {
+          return previous;
+        }
+
+        return remaining[0]?.id ?? "";
+      });
+
+      return remaining;
+    });
+
+    setWorkspaceDetailsWorkspaceId(null);
+    setWorkspaceDetails(null);
   }
 
   return (
@@ -200,6 +314,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
           }
           onBoardSelect={setActiveBoardId}
           onCreateWorkspace={() => setIsCreateWorkspaceModalOpen(true)}
+          onJoinWorkspace={() => setIsJoinWorkspaceModalOpen(true)}
           onOpenWorkspaceDetails={(workspaceId) => {
             setWorkspaceDetailsWorkspaceId(workspaceId);
             setIsWorkspaceMenuOpen(false);
@@ -251,21 +366,28 @@ export function DashboardShell({ user }: { user: AuthUser }) {
         />
       ) : null}
 
-      {workspaceDetailsWorkspace ? (
+      {isJoinWorkspaceModalOpen ? (
+        <JoinWorkspaceModal
+          onClose={() => setIsJoinWorkspaceModalOpen(false)}
+          onSubmit={handleJoinWorkspace}
+        />
+      ) : null}
+
+      {workspaceDetails ? (
         <WorkspaceDetailsModal
-          key={workspaceDetailsWorkspace.id}
+          key={workspaceDetails.id}
           activityItems={
-            workspaceActivityById[workspaceDetailsWorkspace.id] ?? []
+            workspaceActivityById[workspaceDetails.id] ?? []
           }
+          currentUserId={user.id}
           onClose={() => setWorkspaceDetailsWorkspaceId(null)}
           onDeleteWorkspace={handleDeleteWorkspace}
+          onInviteMember={handleInviteWorkspaceMember}
+          onLeaveWorkspace={handleLeaveWorkspace}
+          onRemoveMember={handleRemoveWorkspaceMember}
+          onUpdateMemberRole={handleUpdateWorkspaceMemberRole}
           onUpdateWorkspace={handleUpdateWorkspace}
-          ownerLabel={
-            workspaceDetailsWorkspace.createdBy === user.id
-              ? user.name
-              : workspaceDetailsWorkspace.createdBy
-          }
-          workspace={workspaceDetailsWorkspace}
+          workspace={workspaceDetails}
         />
       ) : null}
     </div>

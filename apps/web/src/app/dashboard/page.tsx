@@ -59,5 +59,5 @@ export default function DashboardPage() {
     );
   }
 
-  return <DashboardShell userName={user.name} />;
+  return <DashboardShell user={user} />;
 }

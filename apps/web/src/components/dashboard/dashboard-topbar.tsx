@@ -2,11 +2,10 @@
 
 import {
   Bell,
-  ChevronRight,
   Clock3,
   Filter,
-  Menu,
-  Pencil,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
 } from "lucide-react";
 
@@ -15,48 +14,37 @@ import { cn } from "@/lib/utils";
 type DashboardTopbarProps = {
   boardName: string;
   isSidebarOpen: boolean;
-  onShowSidebar: () => void;
+  onToggleSidebar: () => void;
 };
 
 export function DashboardTopbar({
   boardName,
   isSidebarOpen,
-  onShowSidebar,
+  onToggleSidebar,
 }: DashboardTopbarProps) {
   return (
     <header
       className={cn(
-        "flex items-center justify-between gap-4 border-b border-white/6 px-4 transition-[height,padding] duration-200",
-        isSidebarOpen ? "h-13 py-1" : "h-12 py-1",
+        "flex h-13 min-w-0 items-center justify-between gap-4 px-4 py-1 transition-[height,padding] duration-200",
       )}
     >
       <div className="flex min-w-0 items-center gap-2">
-        {!isSidebarOpen ? (
-          <button
-            type="button"
-            aria-label="Show sidebar"
-            onClick={onShowSidebar}
-            className="rounded-md p-1.5 text-[#8a8a8a] transition hover:bg-white/5 hover:text-white"
-          >
-            <Menu className="h-4 w-4" />
-          </button>
-        ) : null}
-
-        {!isSidebarOpen ? (
-          <ChevronRight className="h-4 w-4 text-[#6f6f6f]" />
-        ) : null}
-
-        <h1 className="truncate text-[17px] font-semibold tracking-[-0.02em] text-[#f5f5f3]">
-          {boardName}
-        </h1>
-
         <button
           type="button"
-          aria-label="Edit board"
-          className="rounded-md p-1.5 text-[#7d7d7d] transition hover:bg-white/5 hover:text-white"
+          aria-label="Toggle sidebar"
+          onClick={onToggleSidebar}
+          className="rounded-md p-1.5 text-[#8a8a8a] transition hover:bg-white/5 hover:text-white"
         >
-          <Pencil className="h-3.5 w-3.5" />
+          {isSidebarOpen ? (
+            <PanelLeftClose className="h-4 w-4" />
+          ) : (
+            <PanelLeftOpen className="h-4 w-4" />
+          )}
         </button>
+
+        <h1 className="truncate text-[19px] font-semibold tracking-[-0.025em] text-[#f5f5f3]">
+          {boardName}
+        </h1>
       </div>
 
       <div className="flex flex-1 items-center justify-center px-2">

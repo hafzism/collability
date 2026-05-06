@@ -10,10 +10,13 @@ describe('WorkspacesController', () => {
   const workspacesService = {
     createWorkspace: jest.fn(),
     listUserWorkspaces: jest.fn(),
+    inviteMember: jest.fn(),
+    joinWorkspaceByCode: jest.fn(),
     getWorkspaceById: jest.fn(),
     updateWorkspace: jest.fn(),
     deleteWorkspace: jest.fn(),
-    addMember: jest.fn(),
+    updateMemberRole: jest.fn(),
+    leaveWorkspace: jest.fn(),
     removeMember: jest.fn(),
   };
 
@@ -61,9 +64,9 @@ describe('WorkspacesController', () => {
   it('lists workspaces for the authenticated user', async () => {
     workspacesService.listUserWorkspaces.mockResolvedValue([{ id: 'workspace-1' }]);
 
-    await expect(controller.listWorkspaces({ user: { id: 'user-1' } } as any)).resolves.toEqual([
-      { id: 'workspace-1' },
-    ]);
+    await expect(
+      controller.listWorkspaces({ user: { id: 'user-1' } } as any),
+    ).resolves.toEqual([{ id: 'workspace-1' }]);
 
     expect(workspacesService.listUserWorkspaces).toHaveBeenCalledWith('user-1');
   });
@@ -77,6 +80,48 @@ describe('WorkspacesController', () => {
       id: 'workspace-1',
       currentUserRole: WorkspaceRole.ADMIN,
     });
+  });
+
+  it('sends a workspace invite email', async () => {
+    workspacesService.inviteMember.mockResolvedValue({
+      success: true,
+      email: 'member@company.com',
+      joinCode: 'abc-def-ghi',
+    });
+
+    await expect(
+      controller.inviteMember(
+        { user: { id: 'user-1', name: 'John' } } as any,
+        'workspace-1',
+        { email: 'member@company.com' },
+      ),
+    ).resolves.toEqual({
+      success: true,
+      email: 'member@company.com',
+      joinCode: 'abc-def-ghi',
+    });
+
+    expect(workspacesService.inviteMember).toHaveBeenCalledWith(
+      'workspace-1',
+      'John',
+      'member@company.com',
+    );
+  });
+
+  it('joins a workspace by reusable code', async () => {
+    workspacesService.joinWorkspaceByCode.mockResolvedValue({ id: 'workspace-1' });
+
+    await expect(
+      controller.joinWorkspace(
+        { user: { id: 'user-1' } } as any,
+        { code: 'abc-def-ghi' },
+      ),
+    ).resolves.toEqual({ id: 'workspace-1' });
+
+    expect(workspacesService.joinWorkspaceByCode).toHaveBeenCalledWith(
+      'user-1',
+      'abc-def-ghi',
+    );
   });
 
   it('updates a workspace by id', async () => {
@@ -96,5 +141,21 @@ describe('WorkspacesController', () => {
 
     await expect(controller.deleteWorkspace('workspace-1')).resolves.toBeUndefined();
     expect(workspacesService.deleteWorkspace).toHaveBeenCalledWith('workspace-1');
+  });
+
+  it('lets a non-owner member leave their workspace', async () => {
+    workspacesService.leaveWorkspace.mockResolvedValue(undefined);
+
+    await expect(
+      controller.leaveWorkspace(
+        { user: { id: 'user-1' } } as any,
+        'workspace-1',
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(workspacesService.leaveWorkspace).toHaveBeenCalledWith(
+      'workspace-1',
+      'user-1',
+    );
   });
 });

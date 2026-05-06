@@ -71,6 +71,7 @@ model Workspace {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
+  joinCode  String   @unique
   createdBy String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

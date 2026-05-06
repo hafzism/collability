@@ -20,9 +20,11 @@ import { WorkspaceRole } from '../common/enums/workspace-role.enum';
 import type { AuthenticatedRequest } from '../common/interfaces/authenticated-request.interface';
 import { BoardsService } from '../boards/boards.service';
 import { CreateBoardDto } from '../boards/dto/create-board.dto';
-import { AddWorkspaceMemberDto } from './dto/add-workspace-member.dto';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
+import { InviteWorkspaceMemberDto } from './dto/invite-workspace-member.dto';
+import { JoinWorkspaceDto } from './dto/join-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
+import { UpdateWorkspaceMemberRoleDto } from './dto/update-workspace-member-role.dto';
 import { WorkspacesService } from './workspaces.service';
 
 @Controller('workspaces')
@@ -44,6 +46,14 @@ export class WorkspacesController {
   @Get()
   async listWorkspaces(@Req() req: AuthenticatedRequest) {
     return this.workspacesService.listUserWorkspaces(req.user.id);
+  }
+
+  @Post('join')
+  async joinWorkspace(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: JoinWorkspaceDto,
+  ) {
+    return this.workspacesService.joinWorkspaceByCode(req.user.id, dto.code);
   }
 
   @Get(':workspaceId')
@@ -77,14 +87,46 @@ export class WorkspacesController {
     await this.workspacesService.deleteWorkspace(workspaceId);
   }
 
-  @Post(':workspaceId/members')
+  @Post(':workspaceId/invitations')
   @UseGuards(WorkspaceGuard, RolesGuard)
   @Roles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
-  async addMember(
+  async inviteMember(
+    @Req() req: AuthenticatedRequest,
     @Param('workspaceId') workspaceId: string,
-    @Body() dto: AddWorkspaceMemberDto,
+    @Body() dto: InviteWorkspaceMemberDto,
   ) {
-    return this.workspacesService.addMember(workspaceId, dto.userId, dto.role);
+    return this.workspacesService.inviteMember(
+      workspaceId,
+      req.user.name,
+      dto.email,
+    );
+  }
+
+  @Patch(':workspaceId/members/:userId')
+  @UseGuards(WorkspaceGuard, RolesGuard)
+  @Roles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  async updateMemberRole(
+    @Req() req: AuthenticatedRequest,
+    @Param('workspaceId') workspaceId: string,
+    @Param('userId') userId: string,
+    @Body() dto: UpdateWorkspaceMemberRoleDto,
+  ) {
+    return this.workspacesService.updateMemberRole(
+      workspaceId,
+      userId,
+      req.user.id,
+      dto.role,
+    );
+  }
+
+  @Delete(':workspaceId/members/me')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(WorkspaceGuard)
+  async leaveWorkspace(
+    @Req() req: AuthenticatedRequest,
+    @Param('workspaceId') workspaceId: string,
+  ) {
+    await this.workspacesService.leaveWorkspace(workspaceId, req.user.id);
   }
 
   @Delete(':workspaceId/members/:userId')

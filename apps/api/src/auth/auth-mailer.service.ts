@@ -25,6 +25,28 @@ export class AuthMailerService {
     });
   }
 
+  async sendWorkspaceInviteEmail(input: {
+    email: string;
+    inviterName: string;
+    workspaceName: string;
+    joinCode: string;
+  }) {
+    const transporter = this.getTransporter();
+    const from = this.configService.get<string>('SMTP_FROM');
+
+    if (!from) {
+      throw new Error('SMTP_FROM must be set');
+    }
+
+    await transporter.sendMail({
+      from,
+      to: input.email,
+      subject: `${input.inviterName} invited you to ${input.workspaceName}`,
+      text: `${input.inviterName} invited you to join ${input.workspaceName} on Collability. Use this code after you log in: ${input.joinCode}`,
+      html: this.buildWorkspaceInviteTemplate(input),
+    });
+  }
+
   private getTransporter() {
     if (this.transporter) {
       return this.transporter;
@@ -95,6 +117,45 @@ export class AuthMailerService {
           <div style="height:1px;background:rgba(255,255,255,0.08);margin:24px 0;"></div>
           <p style="margin:0;font-size:13px;line-height:1.7;color:#71717a;">
             Built for focused, collaborative workflows.
+          </p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+    `;
+  }
+
+  private buildWorkspaceInviteTemplate(input: {
+    inviterName: string;
+    workspaceName: string;
+    joinCode: string;
+  }) {
+    return `
+     <!doctype html>
+<html lang="en">
+  <body style="margin:0;padding:0;background:#050505;color:#f4f4f5;font-family:Inter,Arial,sans-serif;">
+    <div style="padding:32px 16px;background:radial-gradient(circle at top, rgba(255,255,255,0.10), transparent 35%), #050505;">
+      <div style="max-width:560px;margin:0 auto;border:1px solid rgba(255,255,255,0.08);border-radius:28px;overflow:hidden;background:rgba(255,255,255,0.04);box-shadow:0 24px 80px rgba(0,0,0,0.45);">
+        <div style="padding:40px 40px 24px;border-bottom:1px solid rgba(255,255,255,0.08);">
+          <h1 style="margin:0 0 12px;font-size:34px;line-height:1.05;font-weight:600;letter-spacing:-0.04em;color:#ffffff;">
+            Join ${input.workspaceName}
+          </h1>
+          <p style="margin:0;font-size:16px;line-height:1.7;color:#a1a1aa;">
+            ${input.inviterName} invited you to this workspace. Log in to Collability and enter the join code below.
+          </p>
+        </div>
+        <div style="padding:32px 40px 40px;">
+          <div style="margin-bottom:24px;padding:24px;border-radius:24px;background:linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));border:1px solid rgba(255,255,255,0.08);text-align:center;">
+            <div style="font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#a1a1aa;margin-bottom:12px;">
+              Workspace code
+            </div>
+            <div style="font-size:32px;line-height:1;font-weight:700;letter-spacing:0.18em;text-indent:0.18em;color:#ffffff;">
+              ${input.joinCode}
+            </div>
+          </div>
+          <p style="margin:0;font-size:15px;line-height:1.7;color:#d4d4d8;">
+            You will join as a guest first. A workspace admin can update your role after you join.
           </p>
         </div>
       </div>

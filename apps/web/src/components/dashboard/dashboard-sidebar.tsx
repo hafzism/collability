@@ -57,11 +57,8 @@ export function DashboardSidebar({
   workspaceItems,
   workspaceMenuRef,
 }: DashboardSidebarProps) {
-  const orderedWorkspaceItems = activeWorkspace
-    ? [
-        activeWorkspace,
-        ...workspaceItems.filter((workspace) => workspace.id !== activeWorkspace.id),
-      ]
+  const switchableWorkspaceItems = activeWorkspace
+    ? workspaceItems.filter((workspace) => workspace.id !== activeWorkspace.id)
     : workspaceItems;
 
   return (
@@ -74,13 +71,13 @@ export function DashboardSidebar({
       )}
     >
       <div className="flex h-full min-h-0 w-[244px] flex-col">
-        <div className="px-4 pb-4 pt-5">
-          <div className="pb-4">
+        <div className="pb-4 pt-5">
+          <div className="px-4 pb-4">
             <SiteBrand href="/dashboard" textClassName="text-[#f5f5f3]" />
           </div>
 
           {workspaceItems.length === 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-2 px-4">
               <button
                 type="button"
                 onClick={onCreateWorkspace}
@@ -98,76 +95,95 @@ export function DashboardSidebar({
             </div>
           ) : (
             <div ref={workspaceMenuRef} className="relative">
-              <button
-                type="button"
-                aria-expanded={isWorkspaceMenuOpen}
-                onClick={onWorkspaceMenuToggle}
-                className="flex w-full items-center gap-3 rounded-[16px] border border-white/8 bg-[#131313] px-4 py-2.5 text-left shadow-[0_12px_24px_rgba(0,0,0,0.28)] transition hover:border-white/12 hover:bg-[#171717]"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-medium text-[#f1f1ef]">
-                    {activeWorkspace?.name ?? "Select workspace"}
-                  </span>
-                </span>
+              <div className="flex w-full items-center border-x-0 border-y border-white/8 bg-[#131313] transition hover:border-white/12 hover:bg-[#171717]">
+                <button
+                  type="button"
+                  aria-expanded={isWorkspaceMenuOpen}
+                  onClick={onWorkspaceMenuToggle}
+                  className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-4 pr-2 text-left"
+                >
+                  <ChevronsUpDown
+                    className={cn(
+                      "h-4 w-4 shrink-0 text-[#8a8a86] transition-colors",
+                      isWorkspaceMenuOpen ? "text-[#f1f1ef]" : "",
+                    )}
+                  />
 
-                <ChevronsUpDown
-                  className={cn(
-                    "h-4 w-4 shrink-0 text-[#8a8a86] transition-colors",
-                    isWorkspaceMenuOpen ? "text-[#f1f1ef]" : "",
-                  )}
-                />
-              </button>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium text-[#f1f1ef]">
+                      {activeWorkspace?.name ?? "Select workspace"}
+                    </span>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  aria-label="Open workspace details"
+                  onClick={() => {
+                    if (activeWorkspace) {
+                      onOpenWorkspaceDetails(activeWorkspace.id);
+                    }
+                  }}
+                  className="mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#8a8a86] transition hover:bg-white/6 hover:text-white"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+              </div>
 
               {isWorkspaceMenuOpen ? (
-                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-[16px] border border-white/8 bg-[#151515] p-1.5 shadow-[0_24px_50px_rgba(0,0,0,0.48)]">
-                  <div className="space-y-1">
-                    {orderedWorkspaceItems.map((workspace, index) => (
-                      <div
-                        key={workspace.id}
-                        className={cn(
-                          "group flex w-full items-center justify-between rounded-[12px] text-left text-[13px] transition",
-                          index === 0
-                            ? "bg-white/8 text-white"
-                            : "text-[#b2b2b2] hover:bg-white/6 hover:text-[#ededeb]",
-                        )}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => onWorkspaceSelect(workspace.id)}
-                          className="min-w-0 flex-1 px-3 py-2.5 text-left"
+                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 border-x-0 border-y border-white/8 bg-[#151515] p-1.5 shadow-[0_24px_50px_rgba(0,0,0,0.48)]">
+                  {switchableWorkspaceItems.length > 0 ? (
+                    <div className="space-y-1">
+                      {switchableWorkspaceItems.map((workspace) => (
+                        <div
+                          key={workspace.id}
+                          className="group flex w-full items-center justify-between rounded-[10px] text-left text-[13px] text-[#b2b2b2] transition hover:bg-white/6 hover:text-[#ededeb]"
                         >
-                          <span className="truncate">{workspace.name}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onOpenWorkspaceDetails(workspace.id);
-                          }}
-                          className="mr-2 ml-3 rounded-md p-1 text-[#767676] opacity-0 transition group-hover:opacity-100 hover:bg-white/6 hover:text-white"
-                        >
-                          <Info className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                          <button
+                            type="button"
+                            onClick={() => onWorkspaceSelect(workspace.id)}
+                            className="min-w-0 flex-1 px-3 py-2.5 text-left"
+                          >
+                            <span className="truncate">{workspace.name}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenWorkspaceDetails(workspace.id);
+                            }}
+                            className="mr-2 ml-3 rounded-md p-1 text-[#767676] opacity-0 transition group-hover:opacity-100 hover:bg-white/6 hover:text-white"
+                          >
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
 
-                  <div className="mt-1 border-t border-white/6 pt-1.5">
+                  <div
+                    className={cn(
+                      "grid grid-cols-2 gap-1.5",
+                      switchableWorkspaceItems.length > 0
+                        ? "mt-1 border-t border-white/6 pt-1.5"
+                        : "",
+                    )}
+                  >
                     <button
                       type="button"
                       onClick={onCreateWorkspace}
-                      className="flex w-full items-center gap-2 rounded-[12px] px-3 py-2.5 text-left text-[13px] text-[#b2b2b2] transition hover:bg-white/6 hover:text-[#ededeb]"
+                      className="flex min-w-0 items-center justify-center gap-1.5 rounded-[10px] border border-white/8 bg-white/[0.03] px-2.5 py-2.5 text-[12px] font-medium text-[#d6d6d3] transition hover:border-white/14 hover:bg-white/8 hover:text-white"
                     >
                       <Plus className="h-3.5 w-3.5" />
-                      <span>Create workspace</span>
+                      <span>Create</span>
                     </button>
                     <button
                       type="button"
                       onClick={onJoinWorkspace}
-                      className="mt-1 flex w-full items-center gap-2 rounded-[12px] px-3 py-2.5 text-left text-[13px] text-[#b2b2b2] transition hover:bg-white/6 hover:text-[#ededeb]"
+                      className="flex min-w-0 items-center justify-center gap-1.5 rounded-[10px] border border-white/8 bg-white/[0.03] px-2.5 py-2.5 text-[12px] font-medium text-[#d6d6d3] transition hover:border-white/14 hover:bg-white/8 hover:text-white"
                     >
                       <UserPlus className="h-3.5 w-3.5" />
-                      <span>Join workspace</span>
+                      <span>Join</span>
                     </button>
                   </div>
                 </div>

@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { CalendarDays, MessageSquareText, MoreVertical, Plus } from "lucide-react";
-
 import {
-  type KanbanBoard,
-  kanbanBoards,
-} from "./dashboard-types";
+  CalendarDays,
+  MessageSquareText,
+  MoreVertical,
+  Plus,
+} from "lucide-react";
+
+import { type KanbanBoard, kanbanBoards } from "./dashboard-types";
 
 type DashboardKanbanProps = {
   activeBoardId: string;
@@ -15,7 +17,8 @@ type DashboardKanbanProps = {
 
 function getBoard(activeBoardId: string): KanbanBoard {
   return (
-    kanbanBoards.find((board) => board.boardId === activeBoardId) ?? kanbanBoards[0]
+    kanbanBoards.find((board) => board.boardId === activeBoardId) ??
+    kanbanBoards[0]
   );
 }
 
@@ -49,11 +52,9 @@ export function DashboardKanban({ activeBoardId }: DashboardKanbanProps) {
             className="relative h-full min-h-0 w-[296px] shrink-0 self-start"
             ref={openColumnMenuId === column.id ? menuRef : null}
           >
-            <section
-              className="flex max-h-full min-h-[220px] flex-col self-start rounded-[20px] border border-white/6 bg-[#111112] shadow-[0_18px_40px_rgba(0,0,0,0.28)]"
-            >
-              <header className="sticky top-0 z-[1] flex shrink-0 items-center justify-between rounded-t-[20px] bg-[#111112] px-4 py-3">
-                <h3 className="text-[13px] font-medium text-[#ececea]">
+            <section className="ui-pressed-active flex max-h-full min-h-[220px] flex-col self-start overflow-hidden rounded-[20px] border">
+              <header className="sticky top-0 z-[1] flex shrink-0 items-center justify-between bg-transparent px-4 py-3.5">
+                <h3 className="text-[16px] font-semibold tracking-[-0.015em] text-[#f2f2ef]">
                   {column.title}
                 </h3>
 
@@ -120,7 +121,9 @@ export function DashboardKanban({ activeBoardId }: DashboardKanbanProps) {
                                 key={assignee.id}
                                 title={assignee.name}
                                 className="flex h-5.5 w-5.5 items-center justify-center rounded-full border border-[#121213] text-[8px] font-semibold text-white"
-                                style={{ backgroundColor: assignee.avatarColor }}
+                                style={{
+                                  backgroundColor: assignee.avatarColor,
+                                }}
                               >
                                 {assignee.initials}
                               </span>

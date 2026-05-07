@@ -30,7 +30,7 @@ export function DashboardModal({
     >
       <div
         className={cn(
-          "w-full rounded-[14px] border border-white/10 bg-[#111111] p-6 shadow-[0_32px_80px_rgba(0,0,0,0.55)]",
+          "ui-pressed-active w-full rounded-[14px] border p-6",
           className,
         )}
       >

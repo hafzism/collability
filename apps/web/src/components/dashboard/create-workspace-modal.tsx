@@ -66,7 +66,7 @@ export function CreateWorkspaceModal({
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Product Ops"
-              className="w-full rounded-[14px] border border-white/10 bg-[#171717] px-4 py-3 text-sm text-white outline-none transition focus:border-[#d66c12]/70"
+              className="ui-pressed-active w-full rounded-[14px] border px-4 py-3 text-sm text-white outline-none transition"
             />
           </label>
 
@@ -79,14 +79,14 @@ export function CreateWorkspaceModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-[12px] px-4 py-2 text-sm text-[#bdbdb8] transition hover:bg-white/6 hover:text-white"
+              className="ui-pressed-button rounded-[12px] border px-4 py-2 text-sm transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={Boolean(error) || isSubmitting}
-              className="rounded-[12px] bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-[#e9e9e6] disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-pressed-primary rounded-[12px] border px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? "Creating..." : "Create workspace"}
             </button>

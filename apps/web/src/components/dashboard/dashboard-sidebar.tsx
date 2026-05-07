@@ -172,7 +172,7 @@ export function DashboardSidebar({
                     <button
                       type="button"
                       onClick={onCreateWorkspace}
-                      className="flex min-w-0 items-center justify-center gap-1.5 rounded-[10px] border border-white/8 bg-white/[0.03] px-2.5 py-2.5 text-[12px] font-medium text-[#d6d6d3] transition hover:border-white/14 hover:bg-white/8 hover:text-white"
+                      className="ui-pressed-primary flex min-w-0 items-center justify-center gap-1.5 rounded-[10px] border px-2.5 py-2.5 text-[12px] font-medium transition"
                     >
                       <Plus className="h-3.5 w-3.5" />
                       <span>Create</span>
@@ -180,7 +180,7 @@ export function DashboardSidebar({
                     <button
                       type="button"
                       onClick={onJoinWorkspace}
-                      className="flex min-w-0 items-center justify-center gap-1.5 rounded-[10px] border border-white/8 bg-white/[0.03] px-2.5 py-2.5 text-[12px] font-medium text-[#d6d6d3] transition hover:border-white/14 hover:bg-white/8 hover:text-white"
+                      className="ui-pressed-button flex min-w-0 items-center justify-center gap-1.5 rounded-[10px] border px-2.5 py-2.5 text-[12px] font-medium transition"
                     >
                       <UserPlus className="h-3.5 w-3.5" />
                       <span>Join</span>
@@ -215,9 +215,9 @@ export function DashboardSidebar({
                   type="button"
                   onClick={() => onBoardSelect(item.id)}
                   className={cn(
-                    "group flex w-full items-center justify-between rounded-[10px] px-3 py-2.5 text-left text-[14px] transition",
+                    "group flex w-full items-center justify-between rounded-[10px] border border-transparent px-3 py-2.5 text-left text-[14px] transition",
                     isActive
-                      ? "bg-white/8 text-white"
+                      ? "ui-pressed-active font-medium"
                       : "text-[#979797] hover:bg-white/4 hover:text-[#ececea]",
                   )}
                 >

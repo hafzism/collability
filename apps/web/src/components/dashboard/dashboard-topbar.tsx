@@ -49,7 +49,7 @@ export function DashboardTopbar({
 
       <div className="flex flex-1 items-center justify-center px-2">
         <div className="flex w-full max-w-[420px] items-center gap-2">
-          <label className="flex h-8 flex-1 items-center gap-2 rounded-[10px] border border-white/6 bg-[#141415] px-3 text-[#8f8f8f]">
+          <label className="ui-pressed-active flex h-8 flex-1 items-center gap-2 rounded-[10px] border px-3 text-[#8f8f8f]">
             <Search className="h-4 w-4 shrink-0" />
             <input
               type="text"
@@ -61,7 +61,7 @@ export function DashboardTopbar({
           <button
             type="button"
             aria-label="Filter"
-            className="flex h-8 items-center gap-2 rounded-[10px] border border-white/6 bg-[#141415] px-3 text-[13px] text-[#b3b3b0] transition hover:bg-white/5 hover:text-white"
+            className="ui-pressed-button flex h-8 items-center gap-2 rounded-[10px] border px-3 text-[13px] transition"
           >
             <Filter className="h-4 w-4" />
             <span>Filter</span>
@@ -73,7 +73,7 @@ export function DashboardTopbar({
         <button
           type="button"
           aria-label="Members"
-          className="flex h-8 w-[125px] items-center justify-center rounded-[10px] border border-white/6 bg-[#141415] px-3 text-[#d8d8d5] transition hover:bg-white/5"
+          className="ui-pressed-button flex h-8 w-[125px] items-center justify-center rounded-[10px] border px-3 transition"
         >
           <span className="flex -space-x-1.5">
             <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#141415] bg-[#d66c12] text-[9px] font-semibold text-white">
@@ -91,7 +91,7 @@ export function DashboardTopbar({
         <button
           type="button"
           aria-label="Activity history"
-          className="rounded-[10px] border border-white/6 bg-[#141415] p-2 text-[#8a8a8a] transition hover:bg-white/5 hover:text-white"
+          className="ui-pressed-button rounded-[10px] border p-2 transition"
         >
           <Clock3 className="h-4 w-4" />
         </button>
@@ -99,7 +99,7 @@ export function DashboardTopbar({
         <button
           type="button"
           aria-label="Notifications"
-          className="rounded-[10px] border border-white/6 bg-[#141415] p-2 text-[#8a8a8a] transition hover:bg-white/5 hover:text-white"
+          className="ui-pressed-button rounded-[10px] border p-2 transition"
         >
           <Bell className="h-4 w-4" />
         </button>

@@ -60,7 +60,7 @@ const MANAGEABLE_ROLES: Array<"ADMIN" | "MEMBER" | "GUEST"> = [
 ];
 
 function roleBadgeClasses() {
-  return "border-white/10 bg-white/[0.03] text-[#d6d6d1]";
+  return "ui-pressed-active text-[#d6d6d1]";
 }
 
 function isValidEmail(value: string) {
@@ -259,7 +259,7 @@ export function WorkspaceDetailsModal({
 
   return (
     <DashboardModal
-      className="flex h-[min(760px,calc(100vh-48px))] max-w-3xl flex-col bg-[#101010] shadow-[0_40px_100px_rgba(0,0,0,0.6)]"
+      className="flex h-[min(760px,calc(100vh-48px))] max-w-3xl flex-col"
       onClose={onClose}
     >
       <div className="flex shrink-0 items-start justify-between gap-4 pb-4">
@@ -348,22 +348,24 @@ export function WorkspaceDetailsModal({
         <button
           type="button"
           onClick={() => setActiveTab("manage")}
-          className={`rounded-[12px] px-4 py-2 text-sm transition ${
+          className={cn(
+            "rounded-[12px] border border-transparent px-4 py-2 text-sm transition",
             activeTab === "manage"
-              ? "bg-white/10 text-white"
-              : "text-[#9a9a95] hover:bg-white/6 hover:text-white"
-          }`}
+              ? "ui-pressed-active font-medium"
+              : "text-[#9a9a95] hover:bg-white/6 hover:text-white",
+          )}
         >
           Manage
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("activity")}
-          className={`rounded-[12px] px-4 py-2 text-sm transition ${
+          className={cn(
+            "rounded-[12px] border border-transparent px-4 py-2 text-sm transition",
             activeTab === "activity"
-              ? "bg-white/10 text-white"
-              : "text-[#9a9a95] hover:bg-white/6 hover:text-white"
-          }`}
+              ? "ui-pressed-active font-medium"
+              : "text-[#9a9a95] hover:bg-white/6 hover:text-white",
+          )}
         >
           Activity
         </button>
@@ -373,7 +375,7 @@ export function WorkspaceDetailsModal({
         {activeTab === "manage" ? (
           <div className="flex h-full min-h-0 flex-col gap-5">
             <section className="min-h-0 flex-1 border-b border-white/8 pb-5">
-              <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[14px] border border-white/8 bg-[#121212]">
+              <div className="ui-pressed-active flex h-full min-h-0 flex-col overflow-hidden rounded-[14px] border">
                 <div className="border-b border-white/8 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -381,7 +383,7 @@ export function WorkspaceDetailsModal({
                         Members
                       </p>
                     </div>
-                    <span className="rounded-[10px] border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] font-medium text-[#c9c9c4]">
+                    <span className="ui-pressed-active rounded-[10px] border px-3 py-1 text-[11px] font-medium text-[#c9c9c4]">
                       {workspace.members.length}
                     </span>
                   </div>
@@ -397,13 +399,13 @@ export function WorkspaceDetailsModal({
                           setInviteNotice(null);
                         }}
                         placeholder="teammate@company.com"
-                        className="min-w-0 flex-1 rounded-[10px] border border-white/10 bg-[#171717] px-3.5 py-2.5 text-sm text-white outline-none transition placeholder:text-[#676762] focus:border-white/40"
+                        className="ui-pressed-active min-w-0 flex-1 rounded-[10px] border px-3.5 py-2.5 text-sm text-white outline-none transition placeholder:text-[#676762]"
                       />
                       <button
                         type="button"
                         onClick={handleInviteMember}
                         disabled={!isValidEmail(inviteEmail) || isInviting}
-                        className="min-w-[96px] rounded-[10px] bg-white px-5 py-2.5 text-sm font-medium text-black transition hover:bg-[#e9e9e6] disabled:cursor-not-allowed disabled:opacity-50"
+                        className="ui-pressed-primary min-w-[96px] rounded-[10px] border px-5 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {isInviting ? "Sending" : "Invite"}
                       </button>
@@ -469,7 +471,7 @@ export function WorkspaceDetailsModal({
                                       updatingMemberId === member.userId
                                     }
                                     className={cn(
-                                      "inline-flex items-center gap-2 rounded-[10px] border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] outline-none transition group",
+                                      "ui-pressed-open inline-flex items-center gap-2 rounded-[10px] border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] outline-none transition group",
                                       roleBadgeClasses(),
                                       "disabled:cursor-not-allowed disabled:opacity-60",
                                     )}
@@ -495,7 +497,7 @@ export function WorkspaceDetailsModal({
                                         }
                                         className={cn(
                                           isSelected
-                                            ? "bg-white/8 text-white"
+                                            ? "ui-pressed-active"
                                             : "text-[#c3c3be] hover:bg-white/6 hover:text-white",
                                         )}
                                       >
@@ -524,7 +526,7 @@ export function WorkspaceDetailsModal({
                                 void handleRemoveMember(member.userId)
                               }
                               disabled={removingMemberId === member.userId}
-                              className="rounded-[10px] border border-[#4a2723] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-[#d28f87] transition hover:border-[#6a3630] hover:text-[#f0b1a9] disabled:cursor-not-allowed disabled:opacity-50"
+                              className="ui-pressed-danger rounded-[10px] border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {removingMemberId === member.userId
                                 ? "Removing"
@@ -554,7 +556,7 @@ export function WorkspaceDetailsModal({
                     type="button"
                     onClick={handleLeaveWorkspace}
                     disabled={isLeaving}
-                    className="rounded-[12px] border border-white/10 px-4 py-2 text-sm text-[#d4d4cf] transition hover:bg-white/6 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="ui-pressed-button rounded-[12px] border px-4 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isLeaving ? "Leaving..." : "Leave"}
                   </button>
@@ -577,13 +579,13 @@ export function WorkspaceDetailsModal({
                         setDeleteConfirmation(event.target.value)
                       }
                       placeholder='Type "delete permanently"'
-                      className="min-w-0 flex-1 rounded-[12px] border border-[#6c322a] bg-[#180e0d] px-4 py-3 text-sm text-white outline-none transition focus:border-[#ca6d5f]"
+                      className="ui-pressed-active min-w-0 flex-1 rounded-[12px] border px-4 py-3 text-sm text-white outline-none transition"
                     />
                     <button
                       type="button"
                       onClick={handleDelete}
                       disabled={!canDelete || isDeleting}
-                      className="min-w-[104px] rounded-[12px] bg-[#ca4c37] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#dc5d48] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="ui-pressed-danger min-w-[104px] rounded-[12px] border px-5 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isDeleting ? "Deleting..." : "Delete"}
                     </button>
@@ -599,7 +601,7 @@ export function WorkspaceDetailsModal({
         ) : (
           <div className="flex h-full min-h-0 flex-col overflow-y-auto [scrollbar-color:rgba(255,255,255,0.22)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent">
             {activityItems.length === 0 ? (
-              <div className="flex min-h-[420px] flex-1 items-center justify-center rounded-[14px] border border-dashed border-white/10 bg-[#121212] px-6 text-center">
+              <div className="ui-pressed-active flex min-h-[420px] flex-1 items-center justify-center rounded-[14px] border border-dashed px-6 text-center">
                 <div>
                   <p className="text-sm font-medium text-[#d9d9d4]">
                     No workspace activity yet

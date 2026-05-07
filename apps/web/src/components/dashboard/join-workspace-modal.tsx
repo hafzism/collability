@@ -75,7 +75,7 @@ export function JoinWorkspaceModal({
                 setCode(formatWorkspaceJoinCodeInput(event.target.value))
               }
               placeholder="abc-def-ghi"
-              className="w-full rounded-[14px] border border-white/10 bg-[#171717] px-4 py-3 text-center font-mono text-lg lowercase tracking-[0.24em] text-white outline-none transition focus:border-[#d66c12]/70"
+              className="ui-pressed-active w-full rounded-[14px] border px-4 py-3 text-center font-mono text-lg lowercase tracking-[0.24em] text-white outline-none transition"
             />
           </label>
 
@@ -92,14 +92,14 @@ export function JoinWorkspaceModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-[12px] px-4 py-2 text-sm text-[#bdbdb8] transition hover:bg-white/6 hover:text-white"
+              className="ui-pressed-button rounded-[12px] border px-4 py-2 text-sm transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!isCodeComplete || isSubmitting}
-              className="rounded-[12px] bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-[#e9e9e6] disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-pressed-primary rounded-[12px] border px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? "Joining..." : "Join workspace"}
             </button>

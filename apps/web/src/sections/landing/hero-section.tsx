@@ -23,7 +23,7 @@ function HeroEmailCaptureForm() {
         type="email"
         placeholder="Enter your email"
         required
-        className="h-12 w-full flex-1 rounded-xl border border-white/10 bg-white/5 px-5 text-[16px] text-white outline-none transition-all placeholder:text-muted-foreground focus:border-white/20 focus:ring-1 focus:ring-white/20 backdrop-blur-sm"
+        className="ui-pressed-active h-12 w-full flex-1 rounded-xl border px-5 text-[16px] text-white outline-none transition-all placeholder:text-muted-foreground"
       />
       <Button
         type="submit"

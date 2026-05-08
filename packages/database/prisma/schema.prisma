@@ -18,7 +18,8 @@ enum WorkspaceRole {
 }
 
 enum BoardRole {
-  EDITOR
+  MANAGER
+  CONTRIBUTOR
   VIEWER
 }
 

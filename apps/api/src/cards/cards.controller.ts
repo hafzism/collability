@@ -1,4 +1,17 @@
-import { Controller, Post, Get, Patch, Delete, Param, Body, UseGuards, HttpCode, HttpStatus, Req, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+  Req,
+  Query,
+} from '@nestjs/common';
 import { CardsService } from './cards.service';
 import { CreateCardDto } from './dto/create-card.dto';
 import { UpdateCardDto } from './dto/update-card.dto';
@@ -17,7 +30,7 @@ export class CardsController {
   constructor(private readonly cardsService: CardsService) {}
 
   @Post()
-  @RequireBoardRole(BoardRole.EDITOR)
+  @RequireBoardRole(BoardRole.MANAGER, BoardRole.CONTRIBUTOR)
   async createCard(
     @Req() req: AuthenticatedRequest,
     @Param('boardId') boardId: string,
@@ -41,14 +54,18 @@ export class CardsController {
     const include = includeArchived === 'true';
     const take = limit ? parseInt(limit) : 50;
     const skip = offset ? parseInt(offset) : 0;
-    if (include && req.workspaceRole !== WorkspaceRole.OWNER && req.workspaceRole !== WorkspaceRole.ADMIN) {
-       return this.cardsService.getListCards(boardId, listId, false, take, skip);
+    if (
+      include &&
+      req.workspaceRole !== WorkspaceRole.OWNER &&
+      req.workspaceRole !== WorkspaceRole.ADMIN
+    ) {
+      return this.cardsService.getListCards(boardId, listId, false, take, skip);
     }
     return this.cardsService.getListCards(boardId, listId, include, take, skip);
   }
 
   @Patch(':cardId')
-  @RequireBoardRole(BoardRole.EDITOR)
+  @RequireBoardRole(BoardRole.MANAGER, BoardRole.CONTRIBUTOR)
   async updateCard(
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,
@@ -60,35 +77,48 @@ export class CardsController {
     if (dueDate !== undefined) {
       updateData.dueDate = dueDate ? new Date(dueDate) : null;
     }
-    
+
     return this.cardsService.updateCard(boardId, listId, cardId, updateData);
   }
 
   @Patch(':cardId/reorder')
-  @RequireBoardRole(BoardRole.EDITOR)
+  @RequireBoardRole(BoardRole.MANAGER, BoardRole.CONTRIBUTOR)
   async reorderCard(
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,
     @Param('cardId') cardId: string,
     @Body() dto: ReorderCardDto,
   ) {
-    return this.cardsService.reorderCard(boardId, listId, cardId, dto.beforeId, dto.afterId);
+    return this.cardsService.reorderCard(
+      boardId,
+      listId,
+      cardId,
+      dto.beforeId,
+      dto.afterId,
+    );
   }
 
   @Patch(':cardId/move')
-  @RequireBoardRole(BoardRole.EDITOR)
+  @RequireBoardRole(BoardRole.MANAGER, BoardRole.CONTRIBUTOR)
   async moveCard(
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,
     @Param('cardId') cardId: string,
     @Body() dto: MoveCardDto,
   ) {
-    return this.cardsService.moveCard(boardId, listId, cardId, dto.targetListId, dto.beforeId, dto.afterId);
+    return this.cardsService.moveCard(
+      boardId,
+      listId,
+      cardId,
+      dto.targetListId,
+      dto.beforeId,
+      dto.afterId,
+    );
   }
 
   @Delete(':cardId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @RequireBoardRole(BoardRole.EDITOR)
+  @RequireBoardRole(BoardRole.MANAGER)
   async deleteCard(
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,

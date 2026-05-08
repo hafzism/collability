@@ -1,10 +1,20 @@
-import { Controller, Post, Get, Patch, Delete, Param, Body, UseGuards, HttpCode, HttpStatus, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { BoardsService } from './boards.service';
 import { AddBoardMemberDto } from './dto/add-board-member.dto';
 import { UpdateBoardDto } from './dto/update-board.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BoardGuard } from '../common/guards/board.guard';
-import type { AuthenticatedRequest } from '../common/interfaces/authenticated-request.interface';
 import { BoardRole } from '../common/enums/board-role.enum';
 import { RequireBoardRole } from '../common/decorators/require-board-role.decorator';
 
@@ -19,7 +29,7 @@ export class BoardsController {
   }
 
   @Patch(':boardId')
-  @RequireBoardRole(BoardRole.EDITOR)
+  @RequireBoardRole(BoardRole.MANAGER)
   async updateBoard(
     @Param('boardId') boardId: string,
     @Body() dto: UpdateBoardDto,
@@ -29,13 +39,13 @@ export class BoardsController {
 
   @Delete(':boardId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @RequireBoardRole(BoardRole.EDITOR)
+  @RequireBoardRole(BoardRole.MANAGER)
   async deleteBoard(@Param('boardId') boardId: string) {
     await this.boardsService.deleteBoard(boardId);
   }
 
   @Post(':boardId/members')
-  @RequireBoardRole(BoardRole.EDITOR)
+  @RequireBoardRole(BoardRole.MANAGER)
   async addMember(
     @Param('boardId') boardId: string,
     @Body() dto: AddBoardMemberDto,
@@ -45,7 +55,7 @@ export class BoardsController {
 
   @Delete(':boardId/members/:userId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @RequireBoardRole(BoardRole.EDITOR)
+  @RequireBoardRole(BoardRole.MANAGER)
   async removeMember(
     @Param('boardId') boardId: string,
     @Param('userId') userId: string,

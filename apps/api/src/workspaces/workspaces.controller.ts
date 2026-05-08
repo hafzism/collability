@@ -62,7 +62,8 @@ export class WorkspacesController {
     @Req() req: AuthenticatedRequest,
     @Param('workspaceId') workspaceId: string,
   ) {
-    const workspace = await this.workspacesService.getWorkspaceById(workspaceId);
+    const workspace =
+      await this.workspacesService.getWorkspaceById(workspaceId);
     return {
       ...workspace,
       currentUserRole: req.workspaceRole,
@@ -178,6 +179,7 @@ export class WorkspacesController {
       return this.boardsService.findWorkspaceBoards(
         workspaceId,
         req.user.id,
+        req.workspaceRole as WorkspaceRole,
         false,
         take,
         skip,
@@ -187,6 +189,7 @@ export class WorkspacesController {
     return this.boardsService.findWorkspaceBoards(
       workspaceId,
       req.user.id,
+      req.workspaceRole as WorkspaceRole,
       include,
       take,
       skip,

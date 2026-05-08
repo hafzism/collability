@@ -1,4 +1,17 @@
-import { Controller, Post, Get, Patch, Delete, Param, Body, UseGuards, HttpCode, HttpStatus, Req, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+  Req,
+  Query,
+} from '@nestjs/common';
 import { ListsService } from './lists.service';
 import { CreateListDto } from './dto/create-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
@@ -16,7 +29,7 @@ export class ListsController {
   constructor(private readonly listsService: ListsService) {}
 
   @Post()
-  @RequireBoardRole(BoardRole.EDITOR)
+  @RequireBoardRole(BoardRole.MANAGER)
   async createList(
     @Param('boardId') boardId: string,
     @Body() dto: CreateListDto,
@@ -35,14 +48,18 @@ export class ListsController {
     const include = includeArchived === 'true';
     const take = limit ? parseInt(limit) : 50;
     const skip = offset ? parseInt(offset) : 0;
-    if (include && req.workspaceRole !== WorkspaceRole.OWNER && req.workspaceRole !== WorkspaceRole.ADMIN) {
-       return this.listsService.getBoardLists(boardId, false, take, skip);
+    if (
+      include &&
+      req.workspaceRole !== WorkspaceRole.OWNER &&
+      req.workspaceRole !== WorkspaceRole.ADMIN
+    ) {
+      return this.listsService.getBoardLists(boardId, false, take, skip);
     }
     return this.listsService.getBoardLists(boardId, include, take, skip);
   }
 
   @Patch(':listId')
-  @RequireBoardRole(BoardRole.EDITOR)
+  @RequireBoardRole(BoardRole.MANAGER)
   async updateList(
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,
@@ -52,18 +69,23 @@ export class ListsController {
   }
 
   @Patch(':listId/reorder')
-  @RequireBoardRole(BoardRole.EDITOR)
+  @RequireBoardRole(BoardRole.MANAGER)
   async reorderList(
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,
     @Body() dto: ReorderListDto,
   ) {
-    return this.listsService.reorderList(boardId, listId, dto.beforeId, dto.afterId);
+    return this.listsService.reorderList(
+      boardId,
+      listId,
+      dto.beforeId,
+      dto.afterId,
+    );
   }
 
   @Delete(':listId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @RequireBoardRole(BoardRole.EDITOR)
+  @RequireBoardRole(BoardRole.MANAGER)
   async deleteList(
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,

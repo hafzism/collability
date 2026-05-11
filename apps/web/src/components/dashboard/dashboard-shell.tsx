@@ -13,6 +13,12 @@ import {
   updateBoard as updateBoardRequest,
   updateBoardMemberRole as updateBoardMemberRoleRequest,
 } from "@/lib/boards";
+import {
+  createList,
+  deleteList,
+  listBoardLists,
+  updateList,
+} from "@/lib/lists";
 import { cn } from "@/lib/utils";
 import {
   deleteWorkspace,
@@ -27,8 +33,14 @@ import {
   createWorkspace,
 } from "@/lib/workspaces";
 
-import type { BoardRole, BoardSummary, BoardVisibility } from "./board-types";
-import type { BoardActivityItem, BoardDetail } from "./board-types";
+import type {
+  BoardActivityItem,
+  BoardDetail,
+  BoardList,
+  BoardRole,
+  BoardSummary,
+  BoardVisibility,
+} from "./board-types";
 import { BoardActivityModal } from "./board-activity-modal";
 import { BoardMembersModal } from "./board-members-modal";
 import { BoardSettingsModal } from "./board-settings-modal";
@@ -56,9 +68,13 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   const [boardDetailsById, setBoardDetailsById] = useState<
     Record<string, BoardDetail>
   >({});
+  const [boardListsById, setBoardListsById] = useState<Record<string, BoardList[]>>(
+    {},
+  );
   const [boardsByWorkspaceId, setBoardsByWorkspaceId] = useState<
     Record<string, BoardSummary[]>
   >({});
+  const [createListRequestId, setCreateListRequestId] = useState(0);
   const [activeBoardId, setActiveBoardId] = useState("");
   const [workspaces, setWorkspaces] =
     useState<WorkspaceSummary[]>(initialWorkspaces);
@@ -102,6 +118,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   const activeBoard =
     activeBoards.find((item) => item.id === activeBoardId) ?? activeBoards[0] ?? null;
   const activeBoardDetail = activeBoard ? boardDetailsById[activeBoard.id] ?? null : null;
+  const activeBoardLists = activeBoard ? boardListsById[activeBoard.id] ?? [] : [];
   const userInitials = user.name.trim().slice(0, 2).toUpperCase() || "U";
 
   useEffect(() => {
@@ -221,6 +238,42 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     }
 
     void loadActiveBoardDetail();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeBoardId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadActiveBoardLists() {
+      if (!activeBoardId) {
+        return;
+      }
+
+      try {
+        const lists = await listBoardLists(activeBoardId);
+        if (!isMounted) {
+          return;
+        }
+
+        setBoardListsById((current) => ({
+          ...current,
+          [activeBoardId]: lists,
+        }));
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setWorkspaceErrorMessage(
+          getErrorMessage(error, "Unable to load board lists."),
+        );
+      }
+    }
+
+    void loadActiveBoardLists();
 
     return () => {
       isMounted = false;
@@ -377,6 +430,14 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     }));
   }
 
+  async function refreshBoardLists(boardId: string) {
+    const lists = await listBoardLists(boardId);
+    setBoardListsById((current) => ({
+      ...current,
+      [boardId]: lists,
+    }));
+  }
+
   async function handleCreateWorkspace(values: { name: string }) {
     const workspace = await createWorkspace(values);
 
@@ -515,6 +576,35 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     await removeBoardMember(input);
     await refreshBoardDetail(input.boardId);
     await refreshBoardActivity(input.boardId);
+  }
+
+  async function handleCreateList(input: { boardId: string; title: string }) {
+    const list = await createList(input);
+
+    setBoardListsById((current) => ({
+      ...current,
+      [input.boardId]: [...(current[input.boardId] ?? []), list],
+    }));
+  }
+
+  async function handleRenameList(input: {
+    boardId: string;
+    listId: string;
+    title: string;
+  }) {
+    const updatedList = await updateList(input);
+
+    setBoardListsById((current) => ({
+      ...current,
+      [input.boardId]: (current[input.boardId] ?? []).map((list) =>
+        list.id === updatedList.id ? updatedList : list,
+      ),
+    }));
+  }
+
+  async function handleArchiveList(input: { boardId: string; listId: string }) {
+    await deleteList(input);
+    await refreshBoardLists(input.boardId);
   }
 
   async function handleJoinWorkspace(values: { code: string }) {
@@ -677,6 +767,13 @@ export function DashboardShell({ user }: { user: AuthUser }) {
                 activeBoardDetail?.currentUserBoardRole === "MANAGER"
               }
               isSidebarOpen={isSidebarOpen}
+              onCreateList={() => {
+                if (!activeBoard || activeBoardDetail?.currentUserBoardRole !== "MANAGER") {
+                  return;
+                }
+
+                setCreateListRequestId((current) => current + 1);
+              }}
               onOpenBoardActivity={() => {
                 if (!activeBoard) {
                   return;
@@ -702,7 +799,17 @@ export function DashboardShell({ user }: { user: AuthUser }) {
                   {workspaceErrorMessage}
                 </div>
               ) : null}
-              <DashboardKanban activeBoardId={activeBoard?.id ?? ""} />
+              <DashboardKanban
+                activeBoardId={activeBoard?.id ?? ""}
+                canManageLists={
+                  activeBoardDetail?.currentUserBoardRole === "MANAGER"
+                }
+                createListRequestId={createListRequestId}
+                lists={activeBoardLists}
+                onArchiveList={handleArchiveList}
+                onCreateList={handleCreateList}
+                onRenameList={handleRenameList}
+              />
             </div>
           </div>
         </section>

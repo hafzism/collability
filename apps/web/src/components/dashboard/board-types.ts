@@ -38,3 +38,13 @@ export type BoardActivityItem = {
   label: string;
   timestamp: string;
 };
+
+export type BoardList = {
+  id: string;
+  boardId: string;
+  title: string;
+  position: string;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+};

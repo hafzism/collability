@@ -7,6 +7,7 @@ import {
   Info,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   Search,
   Settings2,
 } from "lucide-react";
@@ -20,6 +21,7 @@ type DashboardTopbarProps = {
   boardMembers: BoardMember[];
   canManageBoard: boolean;
   isSidebarOpen: boolean;
+  onCreateList: () => void;
   onOpenBoardActivity: () => void;
   onOpenBoardMembers: () => void;
   onOpenBoardSettings: () => void;
@@ -31,6 +33,7 @@ export function DashboardTopbar({
   boardMembers,
   canManageBoard,
   isSidebarOpen,
+  onCreateList,
   onOpenBoardActivity,
   onOpenBoardMembers,
   onOpenBoardSettings,
@@ -82,6 +85,17 @@ export function DashboardTopbar({
             <Info className="h-4 w-4" />
           </button>
         )}
+
+        {canManageBoard ? (
+          <button
+            type="button"
+            aria-label="Create list"
+            onClick={onCreateList}
+            className="ui-pressed-button rounded-[10px] border p-2 transition"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        ) : null}
       </div>
 
       <div className="flex flex-1 items-center justify-center px-2">

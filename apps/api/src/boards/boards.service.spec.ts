@@ -17,9 +17,14 @@ describe('BoardsService', () => {
       create: jest.fn(),
       delete: jest.fn(),
       findUnique: jest.fn(),
+      update: jest.fn(),
     },
     workspaceMember: {
       findUnique: jest.fn(),
+    },
+    activityLog: {
+      create: jest.fn(),
+      findMany: jest.fn(),
     },
     $transaction: jest.fn(),
   };
@@ -30,6 +35,7 @@ describe('BoardsService', () => {
       async (callback: (tx: typeof prismaService) => Promise<unknown>) =>
         callback(prismaService as any),
     );
+    prismaService.activityLog.create.mockResolvedValue(undefined);
     service = new BoardsService(prismaService as any);
   });
 
@@ -109,5 +115,63 @@ describe('BoardsService', () => {
         },
       }),
     );
+  });
+
+  it('updates explicit board member roles', async () => {
+    prismaService.board.findUnique.mockResolvedValue({
+      id: 'board-1',
+      workspaceId: 'workspace-1',
+      createdBy: 'user-1',
+    });
+    prismaService.boardMember.findUnique.mockResolvedValue({
+      boardId: 'board-1',
+      userId: 'user-2',
+      role: BoardRole.VIEWER,
+    });
+    prismaService.boardMember.update.mockResolvedValue({
+      boardId: 'board-1',
+      userId: 'user-2',
+      role: BoardRole.CONTRIBUTOR,
+    });
+
+    await expect(
+      service.updateMemberRole(
+        'board-1',
+        'user-2',
+        'user-1',
+        BoardRole.CONTRIBUTOR,
+      ),
+    ).resolves.toEqual({
+      boardId: 'board-1',
+      userId: 'user-2',
+      role: BoardRole.CONTRIBUTOR,
+    });
+  });
+
+  it('lists board activity items', async () => {
+    prismaService.board.findUnique.mockResolvedValue({
+      id: 'board-1',
+      workspaceId: 'workspace-1',
+    });
+    prismaService.activityLog.findMany.mockResolvedValue([
+      {
+        id: 'log-1',
+        action: 'board.created',
+        metadata: {},
+        createdAt: new Date('2026-05-09T10:00:00.000Z'),
+        user: {
+          id: 'user-1',
+          name: 'Hafeez',
+        },
+      },
+    ]);
+
+    await expect(service.getBoardActivity('board-1')).resolves.toEqual([
+      {
+        id: 'log-1',
+        label: 'Hafeez created the board',
+        timestamp: new Date('2026-05-09T10:00:00.000Z'),
+      },
+    ]);
   });
 });

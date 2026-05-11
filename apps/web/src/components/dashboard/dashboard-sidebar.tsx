@@ -4,7 +4,6 @@ import {
   ChevronsUpDown,
   Info,
   LogOut,
-  Pencil,
   Plus,
   Settings2,
   UserPlus,
@@ -13,19 +12,21 @@ import {
 import { cn } from "@/lib/utils";
 import { SiteBrand } from "@/components/shared/site-brand";
 
-import type { BoardItem } from "./dashboard-types";
+import type { BoardSummary } from "./board-types";
 import type { WorkspaceSummary } from "./workspace-types";
 
 type DashboardSidebarProps = {
   accountMenuRef: React.RefObject<HTMLDivElement | null>;
-  activeBoard: BoardItem;
+  activeBoard: BoardSummary | null;
   activeWorkspace: WorkspaceSummary | null;
-  boardItems: BoardItem[];
+  boardItems: BoardSummary[];
   isAccountMenuOpen: boolean;
+  isBoardCreationDisabled: boolean;
   isSidebarOpen: boolean;
   isWorkspaceMenuOpen: boolean;
   onAccountMenuToggle: () => void;
   onBoardSelect: (boardId: string) => void;
+  onCreateBoard: () => void;
   onCreateWorkspace: () => void;
   onJoinWorkspace: () => void;
   onOpenWorkspaceDetails: (workspaceId: string) => void;
@@ -43,10 +44,12 @@ export function DashboardSidebar({
   activeWorkspace,
   boardItems,
   isAccountMenuOpen,
+  isBoardCreationDisabled,
   isSidebarOpen,
   isWorkspaceMenuOpen,
   onAccountMenuToggle,
   onBoardSelect,
+  onCreateBoard,
   onCreateWorkspace,
   onJoinWorkspace,
   onOpenWorkspaceDetails,
@@ -198,37 +201,45 @@ export function DashboardSidebar({
           </p>
           <button
             type="button"
-            className="rounded-md px-2 py-1 text-[12px] font-medium text-[#8d8d8d] transition hover:bg-white/5 hover:text-white"
+            aria-label="Create board"
+            disabled={isBoardCreationDisabled}
+            onClick={onCreateBoard}
+            className="rounded-md p-1.5 text-[#8d8d8d] transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Create board
+            <Plus className="h-4 w-4" />
           </button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-          <nav className="space-y-1">
-            {boardItems.map((item) => {
-              const isActive = item.id === activeBoard.id;
+          {boardItems.length > 0 ? (
+            <nav className="space-y-1">
+              {boardItems.map((item) => {
+                const isActive = item.id === activeBoard?.id;
 
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onBoardSelect(item.id)}
-                  className={cn(
-                    "group flex w-full items-center justify-between rounded-[10px] border border-transparent px-3 py-2.5 text-left text-[14px] transition",
-                    isActive
-                      ? "ui-pressed-active font-medium"
-                      : "text-[#979797] hover:bg-white/4 hover:text-[#ececea]",
-                  )}
-                >
-                  <span className="truncate">{item.name}</span>
-                  <span className="ml-3 opacity-0 transition-opacity group-hover:opacity-100">
-                    <Pencil className="h-3.5 w-3.5 text-[#767676]" />
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onBoardSelect(item.id)}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-[10px] border border-transparent px-3 py-2.5 text-left text-[14px] transition",
+                      isActive
+                        ? "ui-pressed-active font-medium"
+                        : "text-[#979797] hover:bg-white/4 hover:text-[#ececea]",
+                    )}
+                  >
+                    <span className="truncate">{item.title}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          ) : (
+            <div className="px-1 pt-2 text-sm text-[#7d7d79]">
+              {activeWorkspace
+                ? "No boards yet. Create the first one for this workspace."
+                : "Choose a workspace to start creating boards."}
+            </div>
+          )}
         </div>
 
         <div

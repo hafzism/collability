@@ -3,9 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 
 import { getErrorMessage, type AuthUser } from "@/lib/auth";
+import {
+  addBoardMember,
+  createBoard,
+  getBoard,
+  getBoardActivity,
+  listWorkspaceBoards,
+  removeBoardMember,
+  updateBoard as updateBoardRequest,
+  updateBoardMemberRole as updateBoardMemberRoleRequest,
+} from "@/lib/boards";
 import { cn } from "@/lib/utils";
 import {
-  createWorkspace,
   deleteWorkspace,
   getWorkspace,
   inviteWorkspaceMember,
@@ -15,13 +24,19 @@ import {
   removeWorkspaceMember,
   updateWorkspace,
   updateWorkspaceMemberRole,
+  createWorkspace,
 } from "@/lib/workspaces";
 
+import type { BoardRole, BoardSummary, BoardVisibility } from "./board-types";
+import type { BoardActivityItem, BoardDetail } from "./board-types";
+import { BoardActivityModal } from "./board-activity-modal";
+import { BoardMembersModal } from "./board-members-modal";
+import { BoardSettingsModal } from "./board-settings-modal";
+import { CreateBoardModal } from "./create-board-modal";
 import { CreateWorkspaceModal } from "./create-workspace-modal";
 import { DashboardKanban } from "./dashboard-kanban";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardTopbar } from "./dashboard-topbar";
-import { boardItems } from "./dashboard-types";
 import { JoinWorkspaceModal } from "./join-workspace-modal";
 import { WorkspaceDetailsModal } from "./workspace-details-modal";
 import type {
@@ -35,7 +50,16 @@ const initialWorkspaces: WorkspaceSummary[] = [];
 const initialWorkspaceActivity: Record<string, WorkspaceActivityItem[]> = {};
 
 export function DashboardShell({ user }: { user: AuthUser }) {
-  const [activeBoardId, setActiveBoardId] = useState(boardItems[0]?.id ?? "");
+  const [boardActivityById, setBoardActivityById] = useState<
+    Record<string, BoardActivityItem[]>
+  >({});
+  const [boardDetailsById, setBoardDetailsById] = useState<
+    Record<string, BoardDetail>
+  >({});
+  const [boardsByWorkspaceId, setBoardsByWorkspaceId] = useState<
+    Record<string, BoardSummary[]>
+  >({});
+  const [activeBoardId, setActiveBoardId] = useState("");
   const [workspaces, setWorkspaces] =
     useState<WorkspaceSummary[]>(initialWorkspaces);
   const [workspaceActivityById, setWorkspaceActivityById] = useState<
@@ -49,11 +73,19 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isCreateWorkspaceModalOpen, setIsCreateWorkspaceModalOpen] =
     useState(false);
+  const [isCreateBoardModalOpen, setIsCreateBoardModalOpen] = useState(false);
+  const [isBoardActivityModalOpen, setIsBoardActivityModalOpen] = useState(false);
+  const [isBoardMembersModalOpen, setIsBoardMembersModalOpen] = useState(false);
+  const [isBoardSettingsModalOpen, setIsBoardSettingsModalOpen] = useState(false);
   const [isJoinWorkspaceModalOpen, setIsJoinWorkspaceModalOpen] =
     useState(false);
   const [workspaceDetailsWorkspaceId, setWorkspaceDetailsWorkspaceId] =
     useState<string | null>(null);
   const [workspaceDetails, setWorkspaceDetails] =
+    useState<WorkspaceDetail | null>(null);
+  const [boardCreationWorkspaceDetail, setBoardCreationWorkspaceDetail] =
+    useState<WorkspaceDetail | null>(null);
+  const [boardManagementWorkspaceDetail, setBoardManagementWorkspaceDetail] =
     useState<WorkspaceDetail | null>(null);
   const [workspaceErrorMessage, setWorkspaceErrorMessage] = useState<
     string | null
@@ -62,10 +94,14 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const activeBoard =
-    boardItems.find((item) => item.id === activeBoardId) ?? boardItems[0];
   const activeWorkspace =
     workspaces.find((item) => item.id === activeWorkspaceId) ?? null;
+  const activeBoards = activeWorkspaceId
+    ? boardsByWorkspaceId[activeWorkspaceId] ?? []
+    : [];
+  const activeBoard =
+    activeBoards.find((item) => item.id === activeBoardId) ?? activeBoards[0] ?? null;
+  const activeBoardDetail = activeBoard ? boardDetailsById[activeBoard.id] ?? null : null;
   const userInitials = user.name.trim().slice(0, 2).toUpperCase() || "U";
 
   useEffect(() => {
@@ -113,6 +149,87 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   useEffect(() => {
     let isMounted = true;
 
+    async function loadBoards() {
+      if (!activeWorkspaceId) {
+        setActiveBoardId("");
+        return;
+      }
+
+      try {
+        const boards = await listWorkspaceBoards(activeWorkspaceId);
+        if (!isMounted) {
+          return;
+        }
+
+        setBoardsByWorkspaceId((current) => ({
+          ...current,
+          [activeWorkspaceId]: boards,
+        }));
+        setWorkspaceErrorMessage(null);
+        setActiveBoardId((currentActiveBoardId) => {
+          if (boards.some((board) => board.id === currentActiveBoardId)) {
+            return currentActiveBoardId;
+          }
+
+          return boards[0]?.id ?? "";
+        });
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setWorkspaceErrorMessage(
+          getErrorMessage(error, "Unable to load workspace boards."),
+        );
+      }
+    }
+
+    void loadBoards();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeWorkspaceId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadActiveBoardDetail() {
+      if (!activeBoardId) {
+        return;
+      }
+
+      try {
+        const detail = await getBoard(activeBoardId);
+        if (!isMounted) {
+          return;
+        }
+
+        setBoardDetailsById((current) => ({
+          ...current,
+          [activeBoardId]: detail,
+        }));
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setWorkspaceErrorMessage(
+          getErrorMessage(error, "Unable to load board details."),
+        );
+      }
+    }
+
+    void loadActiveBoardDetail();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeBoardId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
     async function loadWorkspaceDetails() {
       if (!workspaceDetailsWorkspaceId) {
         setWorkspaceDetails(null);
@@ -141,6 +258,75 @@ export function DashboardShell({ user }: { user: AuthUser }) {
       isMounted = false;
     };
   }, [workspaceDetailsWorkspaceId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadWorkspaceMembersForBoardCreation() {
+      if (!isCreateBoardModalOpen || !activeWorkspaceId) {
+        setBoardCreationWorkspaceDetail(null);
+        return;
+      }
+
+      try {
+        const detail = await getWorkspace(activeWorkspaceId);
+        if (!isMounted) {
+          return;
+        }
+
+        setBoardCreationWorkspaceDetail(detail);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setBoardCreationWorkspaceDetail(null);
+      }
+    }
+
+    void loadWorkspaceMembersForBoardCreation();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeWorkspaceId, isCreateBoardModalOpen]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadWorkspaceMembersForBoardManagement() {
+      if (
+        (!isBoardMembersModalOpen && !isCreateBoardModalOpen) ||
+        !activeWorkspaceId
+      ) {
+        if (!isBoardMembersModalOpen) {
+          setBoardManagementWorkspaceDetail(null);
+        }
+        return;
+      }
+
+      try {
+        const detail = await getWorkspace(activeWorkspaceId);
+        if (!isMounted) {
+          return;
+        }
+
+        setBoardManagementWorkspaceDetail(detail);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setBoardManagementWorkspaceDetail(null);
+      }
+    }
+
+    void loadWorkspaceMembersForBoardManagement();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeWorkspaceId, isBoardMembersModalOpen, isCreateBoardModalOpen]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -175,6 +361,22 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     setWorkspaceDetails(refreshedWorkspace);
   }
 
+  async function refreshBoardDetail(boardId: string) {
+    const detail = await getBoard(boardId);
+    setBoardDetailsById((current) => ({
+      ...current,
+      [boardId]: detail,
+    }));
+  }
+
+  async function refreshBoardActivity(boardId: string) {
+    const activity = await getBoardActivity(boardId);
+    setBoardActivityById((current) => ({
+      ...current,
+      [boardId]: activity,
+    }));
+  }
+
   async function handleCreateWorkspace(values: { name: string }) {
     const workspace = await createWorkspace(values);
 
@@ -186,6 +388,133 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     setActiveWorkspaceId(workspace.id);
     setIsCreateWorkspaceModalOpen(false);
     setIsWorkspaceMenuOpen(false);
+  }
+
+  async function handleCreateBoard(values: {
+    title: string;
+    description: string;
+    visibility: BoardVisibility;
+  }) {
+    if (!activeWorkspaceId) {
+      throw new Error("Choose a workspace before creating a board.");
+    }
+
+    const board = await createBoard({
+      workspaceId: activeWorkspaceId,
+      title: values.title,
+      description: values.description,
+      visibility: values.visibility,
+    });
+
+    setBoardsByWorkspaceId((current) => ({
+      ...current,
+      [activeWorkspaceId]: [...(current[activeWorkspaceId] ?? []), board],
+    }));
+    setBoardDetailsById((current) => ({
+      ...current,
+      [board.id]: {
+        ...board,
+        currentUserBoardRole: "MANAGER",
+        members: [],
+      },
+    }));
+    setActiveBoardId(board.id);
+
+    return board;
+  }
+
+  async function handleSubmitBoardMembers(input: {
+    boardId: string;
+    members: Array<{
+      userId: string;
+      role: BoardRole;
+    }>;
+  }) {
+    await Promise.all(
+      input.members.map((member) =>
+        addBoardMember({
+          boardId: input.boardId,
+          userId: member.userId,
+          role: member.role,
+        }),
+      ),
+    );
+    await refreshBoardDetail(input.boardId);
+    await refreshBoardActivity(input.boardId);
+  }
+
+  async function handleUpdateBoard(input: {
+    boardId: string;
+    title?: string;
+    description?: string;
+    visibility?: BoardVisibility;
+    archived?: boolean;
+  }) {
+    const updatedBoard = await updateBoardRequest(input);
+
+    if (!activeWorkspaceId) {
+      return;
+    }
+
+    setBoardsByWorkspaceId((current) => {
+      const currentBoards = current[activeWorkspaceId] ?? [];
+
+      if (updatedBoard.archived) {
+        const remainingBoards = currentBoards.filter(
+          (board) => board.id !== updatedBoard.id,
+        );
+
+        setActiveBoardId((currentActiveBoardId) =>
+          currentActiveBoardId === updatedBoard.id
+            ? remainingBoards[0]?.id ?? ""
+            : currentActiveBoardId,
+        );
+
+        return {
+          ...current,
+          [activeWorkspaceId]: remainingBoards,
+        };
+      }
+
+      return {
+        ...current,
+        [activeWorkspaceId]: currentBoards.map((board) =>
+          board.id === updatedBoard.id ? updatedBoard : board,
+        ),
+      };
+    });
+
+    await refreshBoardDetail(updatedBoard.id);
+    await refreshBoardActivity(updatedBoard.id);
+  }
+
+  async function handleAddBoardMember(input: {
+    boardId: string;
+    userId: string;
+    role: BoardRole;
+  }) {
+    await addBoardMember(input);
+    await refreshBoardDetail(input.boardId);
+    await refreshBoardActivity(input.boardId);
+  }
+
+  async function handleUpdateBoardMemberRole(input: {
+    boardId: string;
+    userId: string;
+    role: BoardRole;
+  }) {
+    await updateBoardMemberRoleRequest(input);
+    await refreshBoardDetail(input.boardId);
+    await refreshBoardActivity(input.boardId);
+  }
+
+  async function handleRemoveBoardMember(input: {
+    boardId: string;
+    userId: string;
+  }) {
+    await removeBoardMember(input);
+    await refreshBoardDetail(input.boardId);
+    await refreshBoardActivity(input.boardId);
   }
 
   async function handleJoinWorkspace(values: { code: string }) {
@@ -305,14 +634,16 @@ export function DashboardShell({ user }: { user: AuthUser }) {
           accountMenuRef={accountMenuRef}
           activeBoard={activeBoard}
           activeWorkspace={activeWorkspace}
-          boardItems={boardItems}
+          boardItems={activeBoards}
           isAccountMenuOpen={isAccountMenuOpen}
+          isBoardCreationDisabled={!activeWorkspace}
           isSidebarOpen={isSidebarOpen}
           isWorkspaceMenuOpen={isWorkspaceMenuOpen}
           onAccountMenuToggle={() =>
             setIsAccountMenuOpen((currentState) => !currentState)
           }
           onBoardSelect={setActiveBoardId}
+          onCreateBoard={() => setIsCreateBoardModalOpen(true)}
           onCreateWorkspace={() => setIsCreateWorkspaceModalOpen(true)}
           onJoinWorkspace={() => setIsJoinWorkspaceModalOpen(true)}
           onOpenWorkspaceDetails={(workspaceId) => {
@@ -340,8 +671,26 @@ export function DashboardShell({ user }: { user: AuthUser }) {
         >
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#0f0f10] transition-colors duration-200">
             <DashboardTopbar
-              boardName={activeBoard.name}
+              boardName={activeBoard?.title ?? "Boards"}
+              boardMembers={activeBoardDetail?.members ?? []}
+              canManageBoard={
+                activeBoardDetail?.currentUserBoardRole === "MANAGER"
+              }
               isSidebarOpen={isSidebarOpen}
+              onOpenBoardActivity={() => {
+                if (!activeBoard) {
+                  return;
+                }
+
+                void refreshBoardActivity(activeBoard.id);
+                setIsBoardActivityModalOpen(true);
+              }}
+              onOpenBoardMembers={() => {
+                setIsBoardMembersModalOpen(true);
+              }}
+              onOpenBoardSettings={() => {
+                setIsBoardSettingsModalOpen(true);
+              }}
               onToggleSidebar={() =>
                 setIsSidebarOpen((currentState) => !currentState)
               }
@@ -353,7 +702,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
                   {workspaceErrorMessage}
                 </div>
               ) : null}
-              <DashboardKanban activeBoardId={activeBoard.id} />
+              <DashboardKanban activeBoardId={activeBoard?.id ?? ""} />
             </div>
           </div>
         </section>
@@ -363,6 +712,48 @@ export function DashboardShell({ user }: { user: AuthUser }) {
         <CreateWorkspaceModal
           onClose={() => setIsCreateWorkspaceModalOpen(false)}
           onSubmit={handleCreateWorkspace}
+        />
+      ) : null}
+
+      {isCreateBoardModalOpen && activeWorkspace ? (
+        <CreateBoardModal
+          currentUserId={user.id}
+          onClose={() => setIsCreateBoardModalOpen(false)}
+          onCreateBoard={handleCreateBoard}
+          onSubmitMembers={handleSubmitBoardMembers}
+          workspaceMembers={boardCreationWorkspaceDetail?.members ?? []}
+          workspaceName={activeWorkspace.name}
+        />
+      ) : null}
+
+      {isBoardSettingsModalOpen && activeBoardDetail ? (
+        <BoardSettingsModal
+          board={activeBoardDetail}
+          canManageBoard={
+            activeBoardDetail.currentUserBoardRole === "MANAGER"
+          }
+          onClose={() => setIsBoardSettingsModalOpen(false)}
+          onUpdateBoard={handleUpdateBoard}
+        />
+      ) : null}
+
+      {isBoardMembersModalOpen && activeBoardDetail && boardManagementWorkspaceDetail ? (
+        <BoardMembersModal
+          board={activeBoardDetail}
+          currentUserId={user.id}
+          onAddMember={handleAddBoardMember}
+          onClose={() => setIsBoardMembersModalOpen(false)}
+          onRemoveMember={handleRemoveBoardMember}
+          onUpdateMemberRole={handleUpdateBoardMemberRole}
+          workspaceMembers={boardManagementWorkspaceDetail.members}
+        />
+      ) : null}
+
+      {isBoardActivityModalOpen && activeBoard ? (
+        <BoardActivityModal
+          activityItems={boardActivityById[activeBoard.id] ?? []}
+          boardName={activeBoard.title}
+          onClose={() => setIsBoardActivityModalOpen(false)}
         />
       ) : null}
 

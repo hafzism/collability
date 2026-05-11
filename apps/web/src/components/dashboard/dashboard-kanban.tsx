@@ -244,7 +244,7 @@ export function DashboardKanban({
                           setEditingTitle(column.title);
                         }
                       }}
-                      className="h-9 min-w-0 flex-1 rounded-[12px] border border-white/12 bg-[#121213] px-3 text-[14px] font-medium text-[#f2f2ef] outline-none transition focus:border-white/18 focus:bg-[#141416]"
+                      className="h-9 min-w-0 flex-1 border-b border-white/12 bg-transparent px-0 text-[14px] font-medium text-[#f2f2ef] outline-none transition focus:border-white/25"
                     />
                     <button
                       type="button"
@@ -399,7 +399,7 @@ export function DashboardKanban({
                       }
                     }}
                     placeholder="New list"
-                    className="h-9 min-w-0 flex-1 rounded-[12px] border border-white/12 bg-[#121213] px-3 text-[14px] font-medium text-[#f2f2ef] outline-none transition placeholder:text-[#70706b] focus:border-white/18 focus:bg-[#141416]"
+                    className="h-9 min-w-0 flex-1 border-b border-white/12 bg-transparent px-0 text-[14px] font-medium text-[#f2f2ef] outline-none transition placeholder:text-[#70706b] focus:border-white/25"
                   />
                   <button
                     type="button"

@@ -3,6 +3,7 @@ import axios, { AxiosError } from "axios";
 import type {
   BoardActivityItem,
   BoardDetail,
+  BoardLabel,
   BoardMember,
   BoardRole,
   BoardSummary,
@@ -141,5 +142,19 @@ export function updateBoardMemberRole(input: {
 export function removeBoardMember(input: { boardId: string; userId: string }) {
   return apiRequest<void>(`/boards/${input.boardId}/members/${input.userId}`, {
     method: "DELETE",
+  });
+}
+
+export function createBoardLabel(input: {
+  boardId: string;
+  name: string;
+  color: string;
+}) {
+  return apiRequest<BoardLabel>(`/boards/${input.boardId}/labels`, {
+    method: "POST",
+    body: {
+      name: input.name,
+      color: input.color,
+    },
   });
 }

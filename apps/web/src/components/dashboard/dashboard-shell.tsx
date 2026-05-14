@@ -6,6 +6,7 @@ import { getErrorMessage, type AuthUser } from "@/lib/auth";
 import {
   addBoardMember,
   createBoard,
+  createBoardLabel,
   getBoard,
   getBoardActivity,
   listWorkspaceBoards,
@@ -13,6 +14,11 @@ import {
   updateBoard as updateBoardRequest,
   updateBoardMemberRole as updateBoardMemberRoleRequest,
 } from "@/lib/boards";
+import {
+  createCard,
+  listCards,
+  reorderCard,
+} from "@/lib/cards";
 import {
   createList,
   deleteList,
@@ -35,6 +41,7 @@ import {
 
 import type {
   BoardActivityItem,
+  BoardCard,
   BoardDetail,
   BoardList,
   BoardRole,
@@ -68,6 +75,9 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   const [boardDetailsById, setBoardDetailsById] = useState<
     Record<string, BoardDetail>
   >({});
+  const [cardsByListId, setCardsByListId] = useState<Record<string, BoardCard[]>>(
+    {},
+  );
   const [boardListsById, setBoardListsById] = useState<Record<string, BoardList[]>>(
     {},
   );
@@ -243,6 +253,53 @@ export function DashboardShell({ user }: { user: AuthUser }) {
       isMounted = false;
     };
   }, [activeBoardId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadActiveBoardCards() {
+      if (!activeBoardId || activeBoardLists.length === 0) {
+        return;
+      }
+
+      try {
+        const cardsByList = await Promise.all(
+          activeBoardLists.map(async (list) => ({
+            listId: list.id,
+            cards: await listCards(activeBoardId, list.id),
+          })),
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setCardsByListId((current) => {
+          const next = { ...current };
+
+          for (const item of cardsByList) {
+            next[item.listId] = item.cards;
+          }
+
+          return next;
+        });
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setWorkspaceErrorMessage(
+          getErrorMessage(error, "Unable to load board cards."),
+        );
+      }
+    }
+
+    void loadActiveBoardCards();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeBoardId, activeBoardLists]);
 
   useEffect(() => {
     let isMounted = true;
@@ -438,6 +495,14 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     }));
   }
 
+  async function refreshListCards(boardId: string, listId: string) {
+    const cards = await listCards(boardId, listId);
+    setCardsByListId((current) => ({
+      ...current,
+      [listId]: cards,
+    }));
+  }
+
   async function handleCreateWorkspace(values: { name: string }) {
     const workspace = await createWorkspace(values);
 
@@ -476,6 +541,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
       [board.id]: {
         ...board,
         currentUserBoardRole: "MANAGER",
+        labels: [],
         members: [],
       },
     }));
@@ -605,6 +671,41 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   async function handleArchiveList(input: { boardId: string; listId: string }) {
     await deleteList(input);
     await refreshBoardLists(input.boardId);
+  }
+
+  async function handleCreateBoardLabel(input: {
+    boardId: string;
+    name: string;
+    color: string;
+  }) {
+    const label = await createBoardLabel(input);
+    await refreshBoardDetail(input.boardId);
+    return label;
+  }
+
+  async function handleCreateCard(input: {
+    boardId: string;
+    listId: string;
+    title: string;
+    description?: string;
+    dueDate?: string;
+    labelIds?: string[];
+    assigneeIds?: string[];
+    position: "top" | "bottom";
+  }) {
+    const existingCards = cardsByListId[input.listId] ?? [];
+    const createdCard = await createCard(input);
+
+    if (input.position === "top" && existingCards.length > 0) {
+      await reorderCard({
+        boardId: input.boardId,
+        listId: input.listId,
+        cardId: createdCard.id,
+        afterId: existingCards[0]?.id,
+      });
+    }
+
+    await refreshListCards(input.boardId, input.listId);
   }
 
   async function handleJoinWorkspace(values: { code: string }) {
@@ -801,12 +902,21 @@ export function DashboardShell({ user }: { user: AuthUser }) {
               ) : null}
               <DashboardKanban
                 activeBoardId={activeBoard?.id ?? ""}
+                boardLabels={activeBoardDetail?.labels ?? []}
+                boardMembers={activeBoardDetail?.members ?? []}
+                canManageCards={
+                  activeBoardDetail?.currentUserBoardRole === "MANAGER" ||
+                  activeBoardDetail?.currentUserBoardRole === "CONTRIBUTOR"
+                }
                 canManageLists={
                   activeBoardDetail?.currentUserBoardRole === "MANAGER"
                 }
+                cardsByListId={cardsByListId}
                 createListRequestId={createListRequestId}
                 lists={activeBoardLists}
                 onArchiveList={handleArchiveList}
+                onCreateBoardLabel={handleCreateBoardLabel}
+                onCreateCard={handleCreateCard}
                 onCreateList={handleCreateList}
                 onRenameList={handleRenameList}
               />

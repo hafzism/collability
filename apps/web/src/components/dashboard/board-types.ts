@@ -28,8 +28,17 @@ export type BoardMember = {
   };
 };
 
+export type BoardLabel = {
+  id: string;
+  boardId: string;
+  name: string;
+  color: string;
+  createdAt: string;
+};
+
 export type BoardDetail = BoardSummary & {
   currentUserBoardRole: BoardRole;
+  labels: BoardLabel[];
   members: BoardMember[];
 };
 
@@ -47,4 +56,39 @@ export type BoardList = {
   archived: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+export type BoardCardAssignee = {
+  id: string;
+  cardId: string;
+  userId: string;
+  assignedAt: string;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    avatarUrl: string | null;
+  };
+};
+
+export type BoardCardLabel = {
+  id: string;
+  cardId: string;
+  labelId: string;
+  label: BoardLabel;
+};
+
+export type BoardCard = {
+  id: string;
+  listId: string;
+  title: string;
+  description: string | null;
+  position: string;
+  dueDate: string | null;
+  createdBy: string;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+  assignees: BoardCardAssignee[];
+  labels: BoardCardLabel[];
 };

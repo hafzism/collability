@@ -1,4 +1,10 @@
-import { IsBoolean, IsDateString, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class UpdateCardDto {
   @IsString()
@@ -16,4 +22,14 @@ export class UpdateCardDto {
   @IsBoolean()
   @IsOptional()
   archived?: boolean;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  labelIds?: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  assigneeIds?: string[];
 }

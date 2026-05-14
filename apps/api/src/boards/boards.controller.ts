@@ -20,6 +20,7 @@ import { BoardRole } from '../common/enums/board-role.enum';
 import { RequireBoardRole } from '../common/decorators/require-board-role.decorator';
 import type { AuthenticatedRequest } from '../common/interfaces/authenticated-request.interface';
 import { UpdateBoardMemberRoleDto } from './dto/update-board-member-role.dto';
+import { CreateBoardLabelDto } from './dto/create-board-label.dto';
 
 @Controller('boards')
 @UseGuards(JwtAuthGuard, BoardGuard)
@@ -44,6 +45,21 @@ export class BoardsController {
   @Get(':boardId/activity')
   async getBoardActivity(@Param('boardId') boardId: string) {
     return this.boardsService.getBoardActivity(boardId);
+  }
+
+  @Post(':boardId/labels')
+  @RequireBoardRole(BoardRole.MANAGER, BoardRole.CONTRIBUTOR)
+  async createBoardLabel(
+    @Req() req: AuthenticatedRequest,
+    @Param('boardId') boardId: string,
+    @Body() dto: CreateBoardLabelDto,
+  ) {
+    return this.boardsService.createBoardLabel(
+      boardId,
+      req.user.id,
+      dto.name,
+      dto.color,
+    );
   }
 
   @Patch(':boardId')

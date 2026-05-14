@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Card } from '@repo/database';
 import sanitizeHtml from 'sanitize-html';
@@ -8,6 +12,29 @@ const sanitize = (value: string) => sanitizeHtml(value, { allowedTags: [], allow
 @Injectable()
 export class CardsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private readonly cardInclude = {
+    assignees: {
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+          },
+        },
+      },
+      orderBy: {
+        assignedAt: 'asc' as const,
+      },
+    },
+    labels: {
+      include: {
+        label: true,
+      },
+    },
+  };
 
   private async validateListBoardAccess(listId: string, boardId: string) {
     const list = await this.prisma.list.findUnique({
@@ -24,7 +51,104 @@ export class CardsService {
     return list;
   }
 
-  async createCard(boardId: string, listId: string, userId: string, data: { title: string; description?: string; dueDate?: string | Date }): Promise<Card> {
+  private async assertBoardLabels(
+    tx: any,
+    boardId: string,
+    labelIds: string[],
+  ): Promise<void> {
+    if (labelIds.length === 0) {
+      return;
+    }
+
+    const labels = await tx.label.findMany({
+      where: {
+        boardId,
+        id: { in: labelIds },
+      },
+      select: { id: true },
+    });
+
+    if (labels.length !== labelIds.length) {
+      throw new ForbiddenException('One or more labels do not belong to this board');
+    }
+  }
+
+  private async assertBoardAssignees(
+    tx: any,
+    boardId: string,
+    assigneeIds: string[],
+  ): Promise<void> {
+    if (assigneeIds.length === 0) {
+      return;
+    }
+
+    const members = await tx.boardMember.findMany({
+      where: {
+        boardId,
+        userId: { in: assigneeIds },
+      },
+      select: { userId: true },
+    });
+
+    if (members.length !== assigneeIds.length) {
+      throw new ForbiddenException('One or more assignees are not board members');
+    }
+  }
+
+  private async syncCardRelations(
+    tx: any,
+    input: {
+      cardId: string;
+      boardId: string;
+      labelIds?: string[];
+      assigneeIds?: string[];
+    },
+  ) {
+    if (input.labelIds) {
+      await this.assertBoardLabels(tx, input.boardId, input.labelIds);
+      await tx.cardLabel.deleteMany({
+        where: { cardId: input.cardId },
+      });
+
+      if (input.labelIds.length > 0) {
+        await tx.cardLabel.createMany({
+          data: input.labelIds.map((labelId) => ({
+            cardId: input.cardId,
+            labelId,
+          })),
+        });
+      }
+    }
+
+    if (input.assigneeIds) {
+      await this.assertBoardAssignees(tx, input.boardId, input.assigneeIds);
+      await tx.cardAssignee.deleteMany({
+        where: { cardId: input.cardId },
+      });
+
+      if (input.assigneeIds.length > 0) {
+        await tx.cardAssignee.createMany({
+          data: input.assigneeIds.map((userId) => ({
+            cardId: input.cardId,
+            userId,
+          })),
+        });
+      }
+    }
+  }
+
+  async createCard(
+    boardId: string,
+    listId: string,
+    userId: string,
+    data: {
+      title: string;
+      description?: string;
+      dueDate?: string | Date;
+      labelIds?: string[];
+      assigneeIds?: string[];
+    },
+  ): Promise<any> {
     await this.validateListBoardAccess(listId, boardId);
 
     const dueDate = data.dueDate ? new Date(data.dueDate) : undefined;
@@ -39,7 +163,7 @@ export class CardsService {
       });
       const position = last ? last.position + 1000n : 1000n;
 
-      return tx.card.create({
+      const card = await tx.card.create({
         data: {
           listId,
           createdBy: userId,
@@ -48,6 +172,18 @@ export class CardsService {
           position,
           dueDate,
         },
+      });
+
+      await this.syncCardRelations(tx, {
+        cardId: card.id,
+        boardId,
+        labelIds: data.labelIds,
+        assigneeIds: data.assigneeIds,
+      });
+
+      return tx.card.findUnique({
+        where: { id: card.id },
+        include: this.cardInclude,
       });
     });
   }
@@ -171,7 +307,7 @@ export class CardsService {
     });
   }
 
-  async getListCards(boardId: string, listId: string, includeArchived = false, limit = 50, offset = 0): Promise<Card[]> {
+  async getListCards(boardId: string, listId: string, includeArchived = false, limit = 50, offset = 0): Promise<any[]> {
     return this.prisma.card.findMany({
       where: {
         listId,
@@ -183,10 +319,18 @@ export class CardsService {
       orderBy: { position: 'asc' },
       take: limit,
       skip: offset,
+      include: this.cardInclude,
     });
   }
 
-  async updateCard(boardId: string, listId: string, cardId: string, data: Partial<Pick<Card, 'title' | 'description' | 'dueDate' | 'archived'>>): Promise<Card> {
+  async updateCard(
+    boardId: string,
+    listId: string,
+    cardId: string,
+    data: Partial<
+      Pick<Card, 'title' | 'description' | 'dueDate' | 'archived'>
+    > & { labelIds?: string[]; assigneeIds?: string[] },
+  ): Promise<any> {
     await this.validateListBoardAccess(listId, boardId);
 
     const card = await this.prisma.card.findFirst({
@@ -202,9 +346,25 @@ export class CardsService {
     if (data.title) data = { ...data, title: sanitize(data.title) };
     if (data.description) data = { ...data, description: sanitize(data.description) };
 
-    return this.prisma.card.update({
-      where: { id: cardId },
-      data,
+    return this.prisma.$transaction(async (tx) => {
+      const { labelIds, assigneeIds, ...cardData } = data;
+
+      await tx.card.update({
+        where: { id: cardId },
+        data: cardData,
+      });
+
+      await this.syncCardRelations(tx, {
+        cardId,
+        boardId,
+        labelIds,
+        assigneeIds,
+      });
+
+      return tx.card.findUnique({
+        where: { id: cardId },
+        include: this.cardInclude,
+      });
     });
   }
 

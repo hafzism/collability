@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Board, BoardMember } from '@repo/database';
+import { Board, BoardMember, Label } from '@repo/database';
 import { BoardRole } from '../common/enums/board-role.enum';
 import { WorkspaceRole } from '../common/enums/workspace-role.enum';
 import sanitizeHtml from 'sanitize-html';
@@ -49,6 +49,11 @@ export class BoardsService {
     return this.prisma.board.findUnique({
       where: { id: boardId },
       include: {
+        labels: {
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
         members: {
           orderBy: {
             addedAt: 'asc',
@@ -66,6 +71,40 @@ export class BoardsService {
         },
       },
     });
+  }
+
+  async createBoardLabel(
+    boardId: string,
+    actorUserId: string,
+    name: string,
+    color: string,
+  ): Promise<Label> {
+    const board = await this.getBoardById(boardId);
+    if (!board) {
+      throw new NotFoundException('Board not found');
+    }
+
+    const label = await this.prisma.label.create({
+      data: {
+        boardId,
+        name: sanitize(name),
+        color,
+      },
+    });
+
+    await this.logBoardActivity(this.prisma, {
+      workspaceId: board.workspaceId,
+      userId: actorUserId,
+      boardId,
+      action: 'label.created',
+      metadata: {
+        labelId: label.id,
+        name: label.name,
+        color: label.color,
+      },
+    });
+
+    return label;
   }
 
   async getBoardMembership(

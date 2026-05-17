@@ -70,14 +70,21 @@ export class WorkspacesController {
     };
   }
 
+  @Get(':workspaceId/activity')
+  @UseGuards(WorkspaceGuard)
+  async getWorkspaceActivity(@Param('workspaceId') workspaceId: string) {
+    return this.workspacesService.getWorkspaceActivity(workspaceId);
+  }
+
   @Patch(':workspaceId')
   @UseGuards(WorkspaceGuard, RolesGuard)
   @Roles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async updateWorkspace(
+    @Req() req: AuthenticatedRequest,
     @Param('workspaceId') workspaceId: string,
     @Body() dto: UpdateWorkspaceDto,
   ) {
-    return this.workspacesService.updateWorkspace(workspaceId, dto);
+    return this.workspacesService.updateWorkspace(workspaceId, req.user.id, dto);
   }
 
   @Delete(':workspaceId')
@@ -135,10 +142,11 @@ export class WorkspacesController {
   @UseGuards(WorkspaceGuard, RolesGuard)
   @Roles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async removeMember(
+    @Req() req: AuthenticatedRequest,
     @Param('workspaceId') workspaceId: string,
     @Param('userId') userId: string,
   ) {
-    await this.workspacesService.removeMember(workspaceId, userId);
+    await this.workspacesService.removeMember(workspaceId, userId, req.user.id);
   }
 
   @Post(':workspaceId/boards')

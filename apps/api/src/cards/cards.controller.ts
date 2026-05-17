@@ -143,6 +143,7 @@ export class CardsController {
   @Patch(':cardId/move')
   @RequireBoardRole(BoardRole.MANAGER, BoardRole.CONTRIBUTOR)
   async moveCard(
+    @Req() req: AuthenticatedRequest,
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,
     @Param('cardId') cardId: string,
@@ -155,6 +156,7 @@ export class CardsController {
       dto.targetListId,
       dto.beforeId,
       dto.afterId,
+      req.user.id,
     );
   }
 
@@ -162,10 +164,11 @@ export class CardsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequireBoardRole(BoardRole.MANAGER)
   async deleteCard(
+    @Req() req: AuthenticatedRequest,
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,
     @Param('cardId') cardId: string,
   ) {
-    await this.cardsService.deleteCard(boardId, listId, cardId);
+    await this.cardsService.deleteCard(boardId, listId, cardId, req.user.id);
   }
 }

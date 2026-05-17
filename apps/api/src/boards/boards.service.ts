@@ -9,15 +9,19 @@ import { Board, BoardMember, Label } from '@repo/database';
 import { BoardRole } from '../common/enums/board-role.enum';
 import { WorkspaceRole } from '../common/enums/workspace-role.enum';
 import sanitizeHtml from 'sanitize-html';
+import { ActivityService } from '../activity/activity.service';
 
 const sanitize = (value: string) =>
   sanitizeHtml(value, { allowedTags: [], allowedAttributes: {} });
 
 @Injectable()
 export class BoardsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityService: ActivityService,
+  ) {}
 
-  private async logBoardActivity(
+  async logBoardActivity(
     tx: PrismaService | any,
     input: {
       workspaceId: string;
@@ -27,15 +31,13 @@ export class BoardsService {
       metadata?: Record<string, unknown>;
     },
   ) {
-    await tx.activityLog.create({
-      data: {
-        workspaceId: input.workspaceId,
-        userId: input.userId,
-        entityType: 'board',
-        entityId: input.boardId,
-        action: input.action,
-        metadata: input.metadata,
-      },
+    await this.activityService.log(tx, {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      entityType: 'board',
+      entityId: input.boardId,
+      action: input.action,
+      metadata: input.metadata,
     });
   }
 
@@ -96,10 +98,10 @@ export class BoardsService {
       workspaceId: board.workspaceId,
       userId: actorUserId,
       boardId,
-      action: 'label.created',
+      action: 'board.label_created',
       metadata: {
         labelId: label.id,
-        name: label.name,
+        labelName: label.name,
         color: label.color,
       },
     });
@@ -164,6 +166,11 @@ export class BoardsService {
         throw new ConflictException('User is already a member of this board');
       }
 
+      const targetUser = await tx.user.findUnique({
+        where: { id: userId },
+        select: { name: true },
+      });
+
       return tx.boardMember.create({
         data: {
           boardId,
@@ -175,9 +182,10 @@ export class BoardsService {
           workspaceId: board.workspaceId,
           userId: actorUserId,
           boardId,
-          action: 'member.added',
+          action: 'board.member_added',
           metadata: {
             targetUserId: userId,
+            targetUserName: targetUser?.name ?? 'Someone',
             role: membership.role,
           },
         });
@@ -213,6 +221,13 @@ export class BoardsService {
             userId,
           },
         },
+        include: {
+          user: {
+            select: {
+              name: true,
+            },
+          },
+        },
       });
 
       if (!existingMembership) {
@@ -233,10 +248,12 @@ export class BoardsService {
         workspaceId: board.workspaceId,
         userId: actorUserId,
         boardId,
-        action: 'member.role_updated',
+        action: 'board.member_role_changed',
         metadata: {
           targetUserId: userId,
-          role,
+          targetUserName: existingMembership.user.name,
+          oldRole: existingMembership.role,
+          newRole: role,
         },
       });
 
@@ -258,7 +275,21 @@ export class BoardsService {
       throw new ForbiddenException('The board creator must remain a manager');
     }
 
-    const membership = await this.getBoardMembership(userId, boardId);
+    const membership = await this.prisma.boardMember.findUnique({
+      where: {
+        boardId_userId: {
+          boardId,
+          userId,
+        },
+      },
+      include: {
+        user: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
     if (!membership) {
       throw new NotFoundException('Board member not found');
     }
@@ -277,9 +308,10 @@ export class BoardsService {
         workspaceId: board.workspaceId,
         userId: actorUserId ?? board.createdBy,
         boardId,
-        action: 'member.removed',
+        action: 'board.member_removed',
         metadata: {
           targetUserId: userId,
+          targetUserName: membership.user.name,
         },
       });
     });
@@ -315,7 +347,7 @@ export class BoardsService {
         boardId: board.id,
         action: 'board.created',
         metadata: {
-          title: board.title,
+          boardTitle: board.title,
           visibility: board.visibility,
         },
       });
@@ -380,17 +412,65 @@ export class BoardsService {
         data,
       });
 
-      await this.logBoardActivity(tx, {
-        workspaceId: existingBoard.workspaceId,
-        userId: actorUserId,
-        boardId,
-        action: board.archived ? 'board.archived' : 'board.updated',
-        metadata: {
-          title: board.title,
-          visibility: board.visibility,
-          archived: board.archived,
-        },
-      });
+      if (
+        data.title !== undefined &&
+        data.title !== existingBoard.title
+      ) {
+        await this.logBoardActivity(tx, {
+          workspaceId: existingBoard.workspaceId,
+          userId: actorUserId,
+          boardId,
+          action: 'board.renamed',
+          metadata: {
+            oldTitle: existingBoard.title,
+            newTitle: board.title,
+          },
+        });
+      }
+
+      if (
+        data.description !== undefined &&
+        (data.description ?? null) !== (existingBoard.description ?? null)
+      ) {
+        await this.logBoardActivity(tx, {
+          workspaceId: existingBoard.workspaceId,
+          userId: actorUserId,
+          boardId,
+          action: 'board.description_changed',
+          metadata: {
+            boardTitle: board.title,
+          },
+        });
+      }
+
+      if (
+        data.visibility !== undefined &&
+        data.visibility !== existingBoard.visibility
+      ) {
+        await this.logBoardActivity(tx, {
+          workspaceId: existingBoard.workspaceId,
+          userId: actorUserId,
+          boardId,
+          action: 'board.visibility_changed',
+          metadata: {
+            boardTitle: board.title,
+            oldVisibility: existingBoard.visibility,
+            newVisibility: board.visibility,
+          },
+        });
+      }
+
+      if (data.archived === true && existingBoard.archived === false) {
+        await this.logBoardActivity(tx, {
+          workspaceId: existingBoard.workspaceId,
+          userId: actorUserId,
+          boardId,
+          action: 'board.archived',
+          metadata: {
+            boardTitle: board.title,
+          },
+        });
+      }
 
       return board;
     });
@@ -430,32 +510,17 @@ export class BoardsService {
       const metadata = (log.metadata ?? {}) as Record<string, unknown>;
       const actorName = log.user.name;
 
-      let label = `${actorName} updated the board`;
-
-      switch (log.action) {
-        case 'board.created':
-          label = `${actorName} created the board`;
-          break;
-        case 'board.archived':
-          label = `${actorName} archived the board`;
-          break;
-        case 'member.added':
-          label = `${actorName} added a board member`;
-          break;
-        case 'member.role_updated':
-          label = `${actorName} changed a board member role to ${String(metadata.role ?? '').toLowerCase()}`;
-          break;
-        case 'member.removed':
-          label = `${actorName} removed a board member`;
-          break;
-        case 'board.updated':
-          label = `${actorName} updated board details`;
-          break;
-      }
-
       return {
         id: log.id,
-        label,
+        label: this.activityService.formatBoardActivity({
+          id: log.id,
+          action: log.action,
+          createdAt: log.createdAt,
+          metadata: log.metadata,
+          user: {
+            name: actorName,
+          },
+        }),
         timestamp: log.createdAt,
       };
     });

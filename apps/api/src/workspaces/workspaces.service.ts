@@ -10,6 +10,7 @@ import sanitizeHtml from 'sanitize-html';
 import { AuthMailerService } from '../auth/auth-mailer.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkspaceRole } from '../common/enums/workspace-role.enum';
+import { ActivityService } from '../activity/activity.service';
 
 const MIN_WORKSPACE_NAME_LENGTH = 2;
 const MAX_WORKSPACE_NAME_LENGTH = 48;
@@ -33,6 +34,7 @@ export class WorkspacesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authMailerService: AuthMailerService,
+    private readonly activityService: ActivityService,
   ) {}
 
   async createWorkspace(userId: string, name: string): Promise<WorkspaceSummary> {
@@ -55,6 +57,17 @@ export class WorkspacesService {
           workspaceId: workspace.id,
           userId,
           role: WorkspaceRole.OWNER,
+        },
+      });
+
+      await this.activityService.log(tx, {
+        workspaceId: workspace.id,
+        userId,
+        entityType: 'workspace',
+        entityId: workspace.id,
+        action: 'workspace.created',
+        metadata: {
+          workspaceName: workspace.name,
         },
       });
 
@@ -173,6 +186,23 @@ export class WorkspacesService {
       },
     });
 
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    });
+
+    await this.activityService.log(this.prisma, {
+      workspaceId: workspace.id,
+      userId,
+      entityType: 'workspace',
+      entityId: workspace.id,
+      action: 'workspace.member_joined',
+      metadata: {
+        targetUserId: userId,
+        targetUserName: user?.name ?? 'Someone',
+      },
+    });
+
     return {
       ...workspace,
       currentUserRole: WorkspaceRole.GUEST,
@@ -200,16 +230,48 @@ export class WorkspacesService {
     return !!role;
   }
 
-  async updateWorkspace(workspaceId: string, data: { name?: string }) {
+  async updateWorkspace(
+    workspaceId: string,
+    actorUserId: string,
+    data: { name?: string },
+  ) {
     const updateData: { name?: string } = {};
+    const existingWorkspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+    });
+
+    if (!existingWorkspace) {
+      throw new NotFoundException('Workspace not found');
+    }
 
     if (data.name !== undefined) {
       updateData.name = this.normalizeAndValidateName(data.name);
     }
 
-    return this.prisma.workspace.update({
-      where: { id: workspaceId },
-      data: updateData,
+    return this.prisma.$transaction(async (tx) => {
+      const workspace = await tx.workspace.update({
+        where: { id: workspaceId },
+        data: updateData,
+      });
+
+      if (
+        updateData.name !== undefined &&
+        updateData.name !== existingWorkspace.name
+      ) {
+        await this.activityService.log(tx, {
+          workspaceId,
+          userId: actorUserId,
+          entityType: 'workspace',
+          entityId: workspaceId,
+          action: 'workspace.renamed',
+          metadata: {
+            oldName: existingWorkspace.name,
+            newName: workspace.name,
+          },
+        });
+      }
+
+      return workspace;
     });
   }
 
@@ -236,16 +298,42 @@ export class WorkspacesService {
       throw new ForbiddenException('Cannot change the workspace owner role');
     }
 
-    return this.prisma.workspaceMember.update({
-      where: {
-        workspaceId_userId: {
-          workspaceId,
-          userId,
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorUserId },
+      select: { name: true },
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      const membership = await tx.workspaceMember.update({
+        where: {
+          workspaceId_userId: {
+            workspaceId,
+            userId,
+          },
         },
-      },
-      data: {
-        role,
-      },
+        data: {
+          role,
+        },
+      });
+
+      await this.activityService.log(tx, {
+        workspaceId,
+        userId: actorUserId,
+        entityType: 'workspace',
+        entityId: workspaceId,
+        action: 'workspace.member_role_changed',
+        metadata: {
+          targetUserId: userId,
+          targetUserName: actorUserId === userId ? actor?.name ?? 'Someone' : (await tx.user.findUnique({
+            where: { id: userId },
+            select: { name: true },
+          }))?.name ?? 'Someone',
+          oldRole: existing.role,
+          newRole: role,
+        },
+      });
+
+      return membership;
     });
   }
 
@@ -267,9 +355,30 @@ export class WorkspacesService {
         },
       },
     });
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    });
+
+    await this.activityService.log(this.prisma, {
+      workspaceId,
+      userId,
+      entityType: 'workspace',
+      entityId: workspaceId,
+      action: 'workspace.member_left',
+      metadata: {
+        targetUserId: userId,
+        targetUserName: user?.name ?? 'Someone',
+      },
+    });
   }
 
-  async removeMember(workspaceId: string, userId: string): Promise<void> {
+  async removeMember(
+    workspaceId: string,
+    userId: string,
+    actorUserId: string,
+  ): Promise<void> {
     const membership = await this.getWorkspaceMembership(userId, workspaceId);
     if (!membership) {
       throw new NotFoundException('Workspace member not found');
@@ -279,14 +388,52 @@ export class WorkspacesService {
       throw new ForbiddenException('Cannot remove the workspace owner');
     }
 
-    await this.prisma.workspaceMember.delete({
-      where: {
-        workspaceId_userId: {
-          workspaceId,
-          userId,
-        },
-      },
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
     });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.workspaceMember.delete({
+        where: {
+          workspaceId_userId: {
+            workspaceId,
+            userId,
+          },
+        },
+      });
+
+      await this.activityService.log(tx, {
+        workspaceId,
+        userId: actorUserId,
+        entityType: 'workspace',
+        entityId: workspaceId,
+        action: 'workspace.member_removed',
+        metadata: {
+          targetUserId: userId,
+          targetUserName: user?.name ?? 'Someone',
+        },
+      });
+    });
+  }
+
+  async getWorkspaceActivity(workspaceId: string, limit = 30) {
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { id: true },
+    });
+
+    if (!workspace) {
+      throw new NotFoundException('Workspace not found');
+    }
+
+    const logs = await this.activityService.listWorkspaceActivity(workspaceId, limit);
+
+    return logs.map((log) => ({
+      id: log.id,
+      label: this.activityService.formatWorkspaceActivity(log),
+      timestamp: log.createdAt,
+    }));
   }
 
   async deleteWorkspace(workspaceId: string): Promise<void> {

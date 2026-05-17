@@ -31,10 +31,11 @@ export class ListsController {
   @Post()
   @RequireBoardRole(BoardRole.MANAGER)
   async createList(
+    @Req() req: AuthenticatedRequest,
     @Param('boardId') boardId: string,
     @Body() dto: CreateListDto,
   ) {
-    return this.listsService.createList(boardId, dto.title);
+    return this.listsService.createList(boardId, req.user.id, dto.title);
   }
 
   @Get()
@@ -61,11 +62,12 @@ export class ListsController {
   @Patch(':listId')
   @RequireBoardRole(BoardRole.MANAGER)
   async updateList(
+    @Req() req: AuthenticatedRequest,
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,
     @Body() dto: UpdateListDto,
   ) {
-    return this.listsService.updateList(boardId, listId, dto);
+    return this.listsService.updateList(boardId, listId, req.user.id, dto);
   }
 
   @Patch(':listId/reorder')
@@ -87,9 +89,10 @@ export class ListsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequireBoardRole(BoardRole.MANAGER)
   async deleteList(
+    @Req() req: AuthenticatedRequest,
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,
   ) {
-    await this.listsService.deleteList(boardId, listId);
+    await this.listsService.deleteList(boardId, listId, req.user.id);
   }
 }

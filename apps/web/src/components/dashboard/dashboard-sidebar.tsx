@@ -175,7 +175,7 @@ export function DashboardSidebar({
                     <button
                       type="button"
                       onClick={onCreateWorkspace}
-                      className="ui-pressed-primary flex min-w-0 items-center justify-center gap-1.5 rounded-[10px] border px-2.5 py-2.5 text-[12px] font-medium transition"
+                      className="ui-pressed-button flex min-w-0 items-center justify-center gap-1.5 rounded-[10px] border px-2.5 py-2.5 text-[12px] font-medium transition"
                     >
                       <Plus className="h-3.5 w-3.5" />
                       <span>Create</span>

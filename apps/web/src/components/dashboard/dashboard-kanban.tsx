@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   Check,
+  Info,
+  MessageSquareText,
   MoreVertical,
   Pipette,
   Plus,
@@ -48,6 +50,16 @@ type DashboardKanbanProps = {
     position: "top" | "bottom";
   }) => Promise<void>;
   onCreateList: (input: { boardId: string; title: string }) => Promise<void>;
+  onOpenCardComments: (input: {
+    boardId: string;
+    listId: string;
+    cardId: string;
+  }) => void;
+  onOpenCardDetails: (input: {
+    boardId: string;
+    listId: string;
+    cardId: string;
+  }) => void;
   onRenameList: (input: {
     boardId: string;
     listId: string;
@@ -589,26 +601,59 @@ function CardDraftComposer({
 }
 
 function BoardCardItem({
+  boardId,
   card,
+  onOpenComments,
+  onOpenDetails,
 }: {
+  boardId: string;
   card: BoardCard;
+  onOpenComments: (input: {
+    boardId: string;
+    listId: string;
+    cardId: string;
+  }) => void;
+  onOpenDetails: (input: {
+    boardId: string;
+    listId: string;
+    cardId: string;
+  }) => void;
 }) {
   return (
     <div className="rounded-[20px] border border-white/7 bg-[linear-gradient(180deg,#1a1a1b_0%,#141415_100%)] p-4 text-left shadow-[0_14px_34px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.03)] ring-1 ring-white/[0.02]">
-      <div className="flex flex-wrap items-center gap-2">
-        {card.labels.map(({ id, label }) => (
-          <span
-            key={id}
-            className="inline-flex rounded-full border px-1.75 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em]"
-            style={{
-              borderColor: `${label.color}55`,
-              backgroundColor: `${label.color}1a`,
-              color: label.color,
-            }}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {card.labels.map(({ id, label }) => (
+            <span
+              key={id}
+              className="inline-flex rounded-full border px-1.75 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em]"
+              style={{
+                borderColor: `${label.color}55`,
+                backgroundColor: `${label.color}1a`,
+                color: label.color,
+              }}
+            >
+              {label.name}
+            </span>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() =>
+              onOpenDetails({
+                boardId,
+                listId: card.listId,
+                cardId: card.id,
+              })
+            }
+            className="rounded-[9px] p-1.5 text-[#7f7f7a] transition hover:bg-white/6 hover:text-white"
+            aria-label={`Open details for ${card.title}`}
           >
-            {label.name}
-          </span>
-        ))}
+            <Info className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       <h4 className="mt-3 text-[14px] font-medium leading-5 text-[#f2f2f0]">
@@ -634,12 +679,31 @@ function BoardCardItem({
           ))}
         </div>
 
-        {card.dueDate ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-white/6 bg-black/20 px-1.75 py-0.5 text-[10px] text-[#8a8a87]">
-            <CalendarDays className="h-2.5 w-2.5" />
-            {formatDueDate(card.dueDate)}
-          </span>
-        ) : null}
+        <div className="flex items-center gap-2 text-[10px] text-[#8a8a87]">
+          {card._count.comments > 0 ? (
+            <button
+              type="button"
+              onClick={() =>
+                onOpenComments({
+                  boardId,
+                  listId: card.listId,
+                  cardId: card.id,
+                })
+              }
+              className="inline-flex items-center gap-1 rounded-full border border-white/6 bg-black/20 px-1.75 py-0.5 transition hover:border-white/10 hover:text-white"
+              aria-label={`Open comments for ${card.title}`}
+            >
+              <MessageSquareText className="h-2.5 w-2.5" />
+              {card._count.comments}
+            </button>
+          ) : null}
+          {card.dueDate ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-white/6 bg-black/20 px-1.75 py-0.5">
+              <CalendarDays className="h-2.5 w-2.5" />
+              {formatDueDate(card.dueDate)}
+            </span>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -658,6 +722,8 @@ export function DashboardKanban({
   onCreateBoardLabel,
   onCreateCard,
   onCreateList,
+  onOpenCardComments,
+  onOpenCardDetails,
   onRenameList,
 }: DashboardKanbanProps) {
   const [openColumnMenuId, setOpenColumnMenuId] = useState<string | null>(null);
@@ -854,7 +920,6 @@ export function DashboardKanban({
             <div
               key={column.id}
               className="relative h-full min-h-0 w-[296px] shrink-0 self-start"
-              ref={openColumnMenuId === column.id ? menuRef : null}
             >
               <section className="ui-pressed-active flex max-h-full min-h-[220px] flex-col self-start overflow-visible rounded-[20px] border">
                 <header className="sticky top-0 z-[1] flex shrink-0 items-center justify-between bg-transparent px-4 py-3.5">
@@ -941,7 +1006,10 @@ export function DashboardKanban({
                 </header>
 
                 {openColumnMenuId === column.id ? (
-                  <div className="absolute right-3 top-13 z-10 min-w-[174px] rounded-[14px] border border-white/8 bg-[#151515] p-1.5 shadow-[0_24px_50px_rgba(0,0,0,0.48)]">
+                  <div
+                    ref={menuRef}
+                    className="absolute right-3 top-13 z-10 min-w-[174px] rounded-[14px] border border-white/8 bg-[#151515] p-1.5 shadow-[0_24px_50px_rgba(0,0,0,0.48)]"
+                  >
                     {confirmArchiveListId === column.id ? (
                       <div className="space-y-3 rounded-[12px] px-3 py-3">
                         <div>
@@ -1017,7 +1085,13 @@ export function DashboardKanban({
                       ) : null}
 
                       {cards.map((card) => (
-                        <BoardCardItem key={card.id} card={card} />
+                        <BoardCardItem
+                          key={card.id}
+                          boardId={activeBoardId}
+                          card={card}
+                          onOpenComments={onOpenCardComments}
+                          onOpenDetails={onOpenCardDetails}
+                        />
                       ))}
 
                       {draft?.position === "bottom" ? (

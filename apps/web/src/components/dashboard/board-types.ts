@@ -91,4 +91,43 @@ export type BoardCard = {
   updatedAt: string;
   assignees: BoardCardAssignee[];
   labels: BoardCardLabel[];
+  _count: {
+    comments: number;
+  };
+};
+
+export type BoardCardComment = {
+  id: string;
+  cardId: string;
+  userId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    avatarUrl: string | null;
+  };
+};
+
+export type BoardCardDetail = BoardCard & {
+  creator: {
+    id: string;
+    email: string;
+    name: string;
+    avatarUrl: string | null;
+  };
+  comments: BoardCardComment[];
+  list: {
+    id: string;
+    title: string;
+    boardId: string;
+  };
+};
+
+export type BoardCardActivityItem = {
+  id: string;
+  label: string;
+  timestamp: string;
 };

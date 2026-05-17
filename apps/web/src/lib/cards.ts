@@ -1,6 +1,11 @@
 import axios, { AxiosError } from "axios";
 
-import type { BoardCard } from "@/components/dashboard/board-types";
+import type {
+  BoardCard,
+  BoardCardActivityItem,
+  BoardCardComment,
+  BoardCardDetail,
+} from "@/components/dashboard/board-types";
 
 type ApiErrorResponse = {
   message?: string | string[];
@@ -118,6 +123,62 @@ export function reorderCard(input: {
         beforeId: input.beforeId,
         afterId: input.afterId,
       },
+    },
+  );
+}
+
+export function getCardDetail(input: {
+  boardId: string;
+  listId: string;
+  cardId: string;
+}) {
+  return apiRequest<BoardCardDetail>(
+    `/boards/${input.boardId}/lists/${input.listId}/cards/${input.cardId}`,
+    {
+      method: "GET",
+    },
+  );
+}
+
+export function getCardActivity(input: {
+  boardId: string;
+  listId: string;
+  cardId: string;
+}) {
+  return apiRequest<BoardCardActivityItem[]>(
+    `/boards/${input.boardId}/lists/${input.listId}/cards/${input.cardId}/activity`,
+    {
+      method: "GET",
+    },
+  );
+}
+
+export function createCardComment(input: {
+  boardId: string;
+  listId: string;
+  cardId: string;
+  content: string;
+}) {
+  return apiRequest<BoardCardComment>(
+    `/boards/${input.boardId}/lists/${input.listId}/cards/${input.cardId}/comments`,
+    {
+      method: "POST",
+      body: {
+        content: input.content,
+      },
+      },
+    );
+}
+
+export function deleteCard(input: {
+  boardId: string;
+  listId: string;
+  cardId: string;
+}) {
+  return apiRequest<void>(
+    `/boards/${input.boardId}/lists/${input.listId}/cards/${input.cardId}`,
+    {
+      method: "DELETE",
     },
   );
 }

@@ -16,8 +16,13 @@ import {
 } from "@/lib/boards";
 import {
   createCard,
+  createCardComment,
+  deleteCard as deleteCardRequest,
+  getCardActivity,
+  getCardDetail,
   listCards,
   reorderCard,
+  updateCard as updateCardRequest,
 } from "@/lib/cards";
 import {
   createList,
@@ -41,6 +46,8 @@ import {
 
 import type {
   BoardActivityItem,
+  BoardCardActivityItem,
+  BoardCardDetail,
   BoardCard,
   BoardDetail,
   BoardList,
@@ -54,6 +61,7 @@ import { BoardSettingsModal } from "./board-settings-modal";
 import { CreateBoardModal } from "./create-board-modal";
 import { CreateWorkspaceModal } from "./create-workspace-modal";
 import { DashboardKanban } from "./dashboard-kanban";
+import { CardDetailModal } from "./card-detail-modal";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardTopbar } from "./dashboard-topbar";
 import { JoinWorkspaceModal } from "./join-workspace-modal";
@@ -78,6 +86,12 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   const [cardsByListId, setCardsByListId] = useState<Record<string, BoardCard[]>>(
     {},
   );
+  const [cardActivityById, setCardActivityById] = useState<
+    Record<string, BoardCardActivityItem[]>
+  >({});
+  const [cardDetailsById, setCardDetailsById] = useState<
+    Record<string, BoardCardDetail>
+  >({});
   const [boardListsById, setBoardListsById] = useState<Record<string, BoardList[]>>(
     {},
   );
@@ -103,6 +117,12 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   const [isBoardActivityModalOpen, setIsBoardActivityModalOpen] = useState(false);
   const [isBoardMembersModalOpen, setIsBoardMembersModalOpen] = useState(false);
   const [isBoardSettingsModalOpen, setIsBoardSettingsModalOpen] = useState(false);
+  const [cardDetailModalState, setCardDetailModalState] = useState<{
+    boardId: string;
+    listId: string;
+    cardId: string;
+    initialTab: "details" | "comments";
+  } | null>(null);
   const [isJoinWorkspaceModalOpen, setIsJoinWorkspaceModalOpen] =
     useState(false);
   const [workspaceDetailsWorkspaceId, setWorkspaceDetailsWorkspaceId] =
@@ -503,6 +523,30 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     }));
   }
 
+  async function refreshCardDetail(input: {
+    boardId: string;
+    listId: string;
+    cardId: string;
+  }) {
+    const detail = await getCardDetail(input);
+    setCardDetailsById((current) => ({
+      ...current,
+      [input.cardId]: detail,
+    }));
+  }
+
+  async function refreshCardActivity(input: {
+    boardId: string;
+    listId: string;
+    cardId: string;
+  }) {
+    const activity = await getCardActivity(input);
+    setCardActivityById((current) => ({
+      ...current,
+      [input.cardId]: activity,
+    }));
+  }
+
   async function handleCreateWorkspace(values: { name: string }) {
     const workspace = await createWorkspace(values);
 
@@ -706,6 +750,72 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     }
 
     await refreshListCards(input.boardId, input.listId);
+  }
+
+  async function handleOpenCardDetail(input: {
+    boardId: string;
+    listId: string;
+    cardId: string;
+    initialTab: "details" | "comments";
+  }) {
+    await Promise.all([
+      refreshCardDetail(input),
+      refreshCardActivity(input),
+    ]);
+    setCardDetailModalState(input);
+  }
+
+  async function handleCreateCardComment(input: {
+    boardId: string;
+    listId: string;
+    cardId: string;
+    content: string;
+  }) {
+    await createCardComment(input);
+    await Promise.all([
+      refreshCardDetail(input),
+      refreshCardActivity(input),
+    ]);
+  }
+
+  async function handleUpdateCard(input: {
+    boardId: string;
+    listId: string;
+    cardId: string;
+    title: string;
+    description?: string;
+    dueDate?: string | null;
+    labelIds?: string[];
+    assigneeIds?: string[];
+  }) {
+    await updateCardRequest(input);
+    await Promise.all([
+      refreshListCards(input.boardId, input.listId),
+      refreshCardDetail(input),
+      refreshCardActivity(input),
+    ]);
+  }
+
+  async function handleArchiveCard(input: {
+    boardId: string;
+    listId: string;
+    cardId: string;
+  }) {
+    await deleteCardRequest(input);
+    await refreshListCards(input.boardId, input.listId);
+    setCardDetailsById((current) => {
+      const next = { ...current };
+      delete next[input.cardId];
+      return next;
+    });
+    setCardActivityById((current) => {
+      const next = { ...current };
+      delete next[input.cardId];
+      return next;
+    });
+    setCardDetailModalState((current) =>
+      current?.cardId === input.cardId ? null : current,
+    );
   }
 
   async function handleJoinWorkspace(values: { code: string }) {
@@ -918,6 +1028,18 @@ export function DashboardShell({ user }: { user: AuthUser }) {
                 onCreateBoardLabel={handleCreateBoardLabel}
                 onCreateCard={handleCreateCard}
                 onCreateList={handleCreateList}
+                onOpenCardComments={(input) =>
+                  void handleOpenCardDetail({
+                    ...input,
+                    initialTab: "comments",
+                  })
+                }
+                onOpenCardDetails={(input) =>
+                  void handleOpenCardDetail({
+                    ...input,
+                    initialTab: "details",
+                  })
+                }
                 onRenameList={handleRenameList}
               />
             </div>
@@ -971,6 +1093,51 @@ export function DashboardShell({ user }: { user: AuthUser }) {
           activityItems={boardActivityById[activeBoard.id] ?? []}
           boardName={activeBoard.title}
           onClose={() => setIsBoardActivityModalOpen(false)}
+        />
+      ) : null}
+
+      {cardDetailModalState && cardDetailsById[cardDetailModalState.cardId] ? (
+        <CardDetailModal
+          activityItems={cardActivityById[cardDetailModalState.cardId] ?? []}
+          boardLabels={activeBoardDetail?.labels ?? []}
+          boardMembers={activeBoardDetail?.members ?? []}
+          canArchiveCard={
+            activeBoardDetail?.currentUserBoardRole === "MANAGER"
+          }
+          canEditCard={
+            activeBoardDetail?.currentUserBoardRole === "MANAGER" ||
+            activeBoardDetail?.currentUserBoardRole === "CONTRIBUTOR"
+          }
+          card={cardDetailsById[cardDetailModalState.cardId]!}
+          initialTab={cardDetailModalState.initialTab}
+          onArchiveCard={() =>
+            handleArchiveCard({
+              boardId: cardDetailModalState.boardId,
+              listId: cardDetailModalState.listId,
+              cardId: cardDetailModalState.cardId,
+            })
+          }
+          onClose={() => setCardDetailModalState(null)}
+          onCreateComment={(input) =>
+            handleCreateCardComment({
+              boardId: cardDetailModalState.boardId,
+              listId: cardDetailModalState.listId,
+              cardId: input.cardId,
+              content: input.content,
+            })
+          }
+          onUpdateCard={(input) =>
+            handleUpdateCard({
+              boardId: cardDetailModalState.boardId,
+              listId: cardDetailModalState.listId,
+              cardId: input.cardId,
+              title: input.title,
+              description: input.description,
+              dueDate: input.dueDate,
+              labelIds: input.labelIds,
+              assigneeIds: input.assigneeIds,
+            })
+          }
         />
       ) : null}
 

@@ -17,6 +17,7 @@ import { CreateCardDto } from './dto/create-card.dto';
 import { UpdateCardDto } from './dto/update-card.dto';
 import { ReorderCardDto } from './dto/reorder-card.dto';
 import { MoveCardDto } from './dto/move-card.dto';
+import { CreateCardCommentDto } from './dto/create-card-comment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BoardGuard } from '../common/guards/board.guard';
 import { RequireBoardRole } from '../common/decorators/require-board-role.decorator';
@@ -62,9 +63,46 @@ export class CardsController {
     return this.cardsService.getListCards(boardId, listId, include, take, skip);
   }
 
+  @Get(':cardId')
+  async getCardDetail(
+    @Param('boardId') boardId: string,
+    @Param('listId') listId: string,
+    @Param('cardId') cardId: string,
+  ) {
+    return this.cardsService.getCardDetail(boardId, listId, cardId);
+  }
+
+  @Get(':cardId/activity')
+  async getCardActivity(
+    @Param('boardId') boardId: string,
+    @Param('listId') listId: string,
+    @Param('cardId') cardId: string,
+  ) {
+    return this.cardsService.getCardActivity(boardId, listId, cardId);
+  }
+
+  @Post(':cardId/comments')
+  @RequireBoardRole(BoardRole.MANAGER, BoardRole.CONTRIBUTOR)
+  async createComment(
+    @Req() req: AuthenticatedRequest,
+    @Param('boardId') boardId: string,
+    @Param('listId') listId: string,
+    @Param('cardId') cardId: string,
+    @Body() dto: CreateCardCommentDto,
+  ) {
+    return this.cardsService.createComment(
+      boardId,
+      listId,
+      cardId,
+      req.user.id,
+      dto.content,
+    );
+  }
+
   @Patch(':cardId')
   @RequireBoardRole(BoardRole.MANAGER, BoardRole.CONTRIBUTOR)
   async updateCard(
+    @Req() req: AuthenticatedRequest,
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,
     @Param('cardId') cardId: string,
@@ -76,7 +114,13 @@ export class CardsController {
       updateData.dueDate = dueDate ? new Date(dueDate) : null;
     }
 
-    return this.cardsService.updateCard(boardId, listId, cardId, updateData);
+    return this.cardsService.updateCard(
+      boardId,
+      listId,
+      cardId,
+      req.user.id,
+      updateData,
+    );
   }
 
   @Patch(':cardId/reorder')

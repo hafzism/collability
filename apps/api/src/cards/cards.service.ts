@@ -13,7 +13,57 @@ const sanitize = (value: string) => sanitizeHtml(value, { allowedTags: [], allow
 export class CardsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async logCardActivity(
+    tx: PrismaService | any,
+    input: {
+      workspaceId: string;
+      userId: string;
+      cardId: string;
+      action: string;
+      metadata?: Record<string, unknown>;
+    },
+  ) {
+    await tx.activityLog.create({
+      data: {
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        entityType: 'card',
+        entityId: input.cardId,
+        action: input.action,
+        metadata: input.metadata,
+      },
+    });
+  }
+
   private readonly cardInclude = {
+    _count: {
+      select: {
+        comments: true,
+      },
+    },
+    creator: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatarUrl: true,
+      },
+    },
+    comments: {
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc' as const,
+      },
+    },
     assignees: {
       include: {
         user: {
@@ -49,6 +99,34 @@ export class CardsService {
       throw new ForbiddenException('List does not belong to the specified board');
     }
     return list;
+  }
+
+  async getCardDetail(boardId: string, listId: string, cardId: string): Promise<any> {
+    await this.validateListBoardAccess(listId, boardId);
+
+    const card = await this.prisma.card.findFirst({
+      where: {
+        id: cardId,
+        listId,
+        list: { boardId },
+      },
+      include: {
+        ...this.cardInclude,
+        list: {
+          select: {
+            id: true,
+            title: true,
+            boardId: true,
+          },
+        },
+      },
+    });
+
+    if (!card) {
+      throw new NotFoundException('Card not found');
+    }
+
+    return card;
   }
 
   private async assertBoardLabels(
@@ -156,6 +234,10 @@ export class CardsService {
     return this.prisma.$transaction(async (tx) => {
       // Row-level lock the list to prevent concurrent calculation races
       await tx.$executeRaw`SELECT 1 FROM "List" WHERE id = ${listId} FOR UPDATE`;
+      const list = await tx.list.findUnique({
+        where: { id: listId },
+        select: { boardId: true },
+      });
 
       const last = await tx.card.findFirst({
         where: { listId },
@@ -180,6 +262,22 @@ export class CardsService {
         labelIds: data.labelIds,
         assigneeIds: data.assigneeIds,
       });
+
+      if (list) {
+        await this.logCardActivity(tx, {
+          workspaceId: (await tx.board.findUnique({
+            where: { id: list.boardId },
+            select: { workspaceId: true },
+          }))!.workspaceId,
+          userId,
+          cardId: card.id,
+          action: 'card.created',
+          metadata: {
+            title: card.title,
+            listId,
+          },
+        });
+      }
 
       return tx.card.findUnique({
         where: { id: card.id },
@@ -327,6 +425,7 @@ export class CardsService {
     boardId: string,
     listId: string,
     cardId: string,
+    actorUserId: string,
     data: Partial<
       Pick<Card, 'title' | 'description' | 'dueDate' | 'archived'>
     > & { labelIds?: string[]; assigneeIds?: string[] },
@@ -361,6 +460,23 @@ export class CardsService {
         assigneeIds,
       });
 
+      const board = await tx.board.findUnique({
+        where: { id: boardId },
+        select: { workspaceId: true },
+      });
+
+      if (board) {
+        await this.logCardActivity(tx, {
+          workspaceId: board.workspaceId,
+          userId: actorUserId,
+          cardId,
+          action: 'card.updated',
+          metadata: {
+            title: cardData.title ?? card.title,
+          },
+        });
+      }
+
       return tx.card.findUnique({
         where: { id: cardId },
         include: this.cardInclude,
@@ -382,6 +498,118 @@ export class CardsService {
     return this.prisma.card.update({
       where: { id: cardId },
       data: { archived: true },
+    });
+  }
+
+  async createComment(
+    boardId: string,
+    listId: string,
+    cardId: string,
+    userId: string,
+    content: string,
+  ): Promise<any> {
+    await this.validateListBoardAccess(listId, boardId);
+
+    const card = await this.prisma.card.findFirst({
+      where: {
+        id: cardId,
+        listId,
+        list: { boardId },
+      },
+      include: {
+        list: {
+          select: {
+            board: {
+              select: {
+                workspaceId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!card) {
+      throw new NotFoundException('Card not found');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const comment = await tx.comment.create({
+        data: {
+          cardId,
+          userId,
+          content: sanitize(content),
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      });
+
+      return comment;
+    });
+  }
+
+  async getCardActivity(
+    boardId: string,
+    listId: string,
+    cardId: string,
+    limit = 20,
+  ) {
+    await this.validateListBoardAccess(listId, boardId);
+
+    const board = await this.prisma.board.findUnique({
+      where: { id: boardId },
+      select: { workspaceId: true },
+    });
+
+    if (!board) {
+      throw new NotFoundException('Board not found');
+    }
+
+    const logs = await this.prisma.activityLog.findMany({
+      where: {
+        workspaceId: board.workspaceId,
+        entityType: 'card',
+        entityId: cardId,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit,
+    });
+
+    return logs.map((log) => {
+      let label = `${log.user.name} updated the card`;
+
+      switch (log.action) {
+        case 'card.created':
+          label = `${log.user.name} created the card`;
+          break;
+        case 'card.updated':
+          label = `${log.user.name} updated card details`;
+          break;
+      }
+
+      return {
+        id: log.id,
+        label,
+        timestamp: log.createdAt,
+      };
     });
   }
 }

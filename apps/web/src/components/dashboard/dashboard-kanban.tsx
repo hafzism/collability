@@ -1,6 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+
+import {
+  closestCenter,
+  DndContext,
+  DragOverlay,
+  MouseSensor,
+  TouchSensor,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { motion } from "framer-motion";
 
 import {
   CalendarDays,
@@ -50,6 +72,15 @@ type DashboardKanbanProps = {
     position: "top" | "bottom";
   }) => Promise<void>;
   onCreateList: (input: { boardId: string; title: string }) => Promise<void>;
+  onMoveCard: (input: {
+    boardId: string;
+    cardId: string;
+    sourceListId: string;
+    targetListId: string;
+    beforeId?: string;
+    afterId?: string;
+    targetIndex: number;
+  }) => Promise<void>;
   onOpenCardComments: (input: {
     boardId: string;
     listId: string;
@@ -60,6 +91,13 @@ type DashboardKanbanProps = {
     listId: string;
     cardId: string;
   }) => void;
+  onReorderList: (input: {
+    boardId: string;
+    listId: string;
+    beforeId?: string;
+    afterId?: string;
+    toIndex: number;
+  }) => Promise<void>;
   onRenameList: (input: {
     boardId: string;
     listId: string;
@@ -70,6 +108,121 @@ type DashboardKanbanProps = {
 type DraftCard = {
   position: "top" | "bottom";
 };
+
+type CardsByListId = Record<string, BoardCard[]>;
+
+type ActiveDrag =
+  | {
+      type: "card";
+      cardId: string;
+      sourceListId: string;
+    }
+  | {
+      type: "list";
+      listId: string;
+    };
+
+const LIST_ITEM_PREFIX = "list:";
+const LIST_DROP_PREFIX = "list-drop:";
+const CARD_ITEM_PREFIX = "card:";
+const TOUCH_DRAG_DELAY = 300;
+
+function sortListsByPosition(items: BoardList[]) {
+  return [...items].sort((left, right) => Number(left.position) - Number(right.position));
+}
+
+function sortCardsByPosition(items: BoardCard[]) {
+  return [...items].sort((left, right) => Number(left.position) - Number(right.position));
+}
+
+function normalizeCardsByListId(
+  lists: BoardList[],
+  cardsByListId: CardsByListId,
+): CardsByListId {
+  return Object.fromEntries(
+    lists.map((list) => [list.id, sortCardsByPosition(cardsByListId[list.id] ?? [])]),
+  );
+}
+
+function renumberCards(cards: BoardCard[], listId: string) {
+  return cards.map((card, index) => ({
+    ...card,
+    listId,
+    position: `${(index + 1) * 1000}`,
+  }));
+}
+
+function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number) {
+  const next = [...items];
+  const [item] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, item);
+  return next;
+}
+
+function areCardOrdersEqual(left: BoardCard[], right: BoardCard[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((card, index) => card.id === right[index]?.id);
+}
+
+function getCardItemId(cardId: string) {
+  return `${CARD_ITEM_PREFIX}${cardId}`;
+}
+
+function getListItemId(listId: string) {
+  return `${LIST_ITEM_PREFIX}${listId}`;
+}
+
+function getListDropId(listId: string) {
+  return `${LIST_DROP_PREFIX}${listId}`;
+}
+
+function isInteractiveTarget(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    Boolean(target.closest("[data-no-dnd='true']"))
+  );
+}
+
+class BoardMouseSensor extends MouseSensor {
+  static activators = [
+    {
+      eventName: "onMouseDown" as const,
+      handler: ({ nativeEvent }: { nativeEvent: MouseEvent }) =>
+        !isInteractiveTarget(nativeEvent.target),
+    },
+  ];
+}
+
+class BoardTouchSensor extends TouchSensor {
+  static activators = [
+    {
+      eventName: "onTouchStart" as const,
+      handler: ({ nativeEvent }: { nativeEvent: TouchEvent }) =>
+        !isInteractiveTarget(nativeEvent.target),
+    },
+  ];
+}
+
+function getCardNeighbors(cards: BoardCard[], targetIndex: number) {
+  return {
+    beforeId: targetIndex > 0 ? cards[targetIndex - 1]?.id : undefined,
+    afterId:
+      targetIndex < cards.length - 1 ? cards[targetIndex + 1]?.id : undefined,
+  };
+}
+
+function findCardListId(cardsByListId: CardsByListId, cardId: string) {
+  for (const [listId, cards] of Object.entries(cardsByListId)) {
+    if (cards.some((card) => card.id === cardId)) {
+      return listId;
+    }
+  }
+
+  return null;
+}
 
 function normalizeListTitle(value: string) {
   return value.trim().replace(/\s+/g, " ");
@@ -303,6 +456,7 @@ function CardDraftComposer({
 
   return (
     <div
+      data-no-dnd="true"
       ref={containerRef}
       className={cn(
         "relative rounded-[20px] border border-white/7 bg-[linear-gradient(180deg,#1a1a1b_0%,#141415_100%)] p-4 shadow-[0_14px_34px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.03)] ring-1 ring-white/[0.02]",
@@ -600,11 +754,12 @@ function CardDraftComposer({
   );
 }
 
-function BoardCardItem({
+function BoardCardBody({
   boardId,
   card,
   onOpenComments,
   onOpenDetails,
+  className,
 }: {
   boardId: string;
   card: BoardCard;
@@ -618,9 +773,15 @@ function BoardCardItem({
     listId: string;
     cardId: string;
   }) => void;
+  className?: string;
 }) {
   return (
-    <div className="rounded-[20px] border border-white/7 bg-[linear-gradient(180deg,#1a1a1b_0%,#141415_100%)] p-4 text-left shadow-[0_14px_34px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.03)] ring-1 ring-white/[0.02]">
+    <div
+      className={cn(
+        "rounded-[20px] border border-white/7 bg-[linear-gradient(180deg,#1a1a1b_0%,#141415_100%)] p-4 text-left shadow-[0_14px_34px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.03)] ring-1 ring-white/[0.02]",
+        className,
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {card.labels.map(({ id, label }) => (
@@ -640,6 +801,7 @@ function BoardCardItem({
 
         <div className="flex items-center gap-1">
           <button
+            data-no-dnd="true"
             type="button"
             onClick={() =>
               onOpenDetails({
@@ -682,6 +844,7 @@ function BoardCardItem({
         <div className="flex items-center gap-2 text-[10px] text-[#8a8a87]">
           {card._count.comments > 0 ? (
             <button
+              data-no-dnd="true"
               type="button"
               onClick={() =>
                 onOpenComments({
@@ -709,6 +872,169 @@ function BoardCardItem({
   );
 }
 
+function SortableCardItem({
+  boardId,
+  card,
+  canManageCards,
+  onOpenComments,
+  onOpenDetails,
+}: {
+  boardId: string;
+  card: BoardCard;
+  canManageCards: boolean;
+  onOpenComments: (input: {
+    boardId: string;
+    listId: string;
+    cardId: string;
+  }) => void;
+  onOpenDetails: (input: {
+    boardId: string;
+    listId: string;
+    cardId: string;
+  }) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({
+      id: getCardItemId(card.id),
+      disabled: !canManageCards,
+      data: {
+        type: "card",
+        cardId: card.id,
+        listId: card.listId,
+      },
+    });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      className={cn(
+        "transition-[opacity,transform] duration-200",
+        isDragging ? "opacity-35" : "",
+      )}
+      {...attributes}
+      {...listeners}
+    >
+      <BoardCardBody
+        boardId={boardId}
+        card={card}
+        onOpenComments={onOpenComments}
+        onOpenDetails={onOpenDetails}
+        className={cn(
+          "transition-[transform,box-shadow] duration-200",
+          canManageCards ? "cursor-grab active:cursor-grabbing" : "",
+        )}
+      />
+    </div>
+  );
+}
+
+function SortableListColumn({
+  children,
+  column,
+  canManageLists,
+  isDraggingCard,
+}: {
+  children: ReactNode;
+  column: BoardList;
+  canManageLists: boolean;
+  isDraggingCard: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({
+      id: getListItemId(column.id),
+      disabled: !canManageLists,
+      data: {
+        type: "list",
+        listId: column.id,
+      },
+    });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="relative min-h-0 w-[296px] shrink-0 self-start"
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      <div
+        className={cn(
+          "transition-opacity duration-200",
+          canManageLists && !isDraggingCard ? "cursor-grab active:cursor-grabbing" : "",
+          isDragging ? "opacity-40" : "",
+        )}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ListDropZone({
+  listId,
+  children,
+  isCardDragActive,
+}: {
+  listId: string;
+  children: ReactNode;
+  isCardDragActive: boolean;
+}) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: getListDropId(listId),
+    data: {
+      type: "list-drop",
+      listId,
+    },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex min-h-full flex-col rounded-[18px] transition-colors duration-200",
+        isCardDragActive && isOver ? "bg-white/[0.03]" : "",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ListOverlay({
+  title,
+  cardCount,
+}: {
+  title: string;
+  cardCount: number;
+}) {
+  return (
+    <motion.div
+      initial={{ scale: 1 }}
+      animate={{ scale: 1.02, rotate: -1 }}
+      className="ui-pressed-active flex w-[296px] min-h-[220px] flex-col rounded-[20px] border opacity-95 shadow-[0_30px_90px_rgba(0,0,0,0.45)]"
+    >
+      <header className="flex shrink-0 items-center justify-between px-4 py-3.5">
+        <h3 className="truncate pr-3 text-[16px] font-semibold tracking-[-0.015em] text-[#f2f2ef]">
+          {title}
+        </h3>
+        <span className="rounded-full border border-white/8 px-2 py-1 text-[10px] text-[#8f8f89]">
+          {cardCount} cards
+        </span>
+      </header>
+      <div className="flex flex-1 items-end px-4 pb-4 pt-1">
+        <p className="text-[12px] text-[#8f8f89]">Drop here</p>
+      </div>
+    </motion.div>
+  );
+}
+
 export function DashboardKanban({
   activeBoardId,
   boardLabels,
@@ -722,8 +1048,10 @@ export function DashboardKanban({
   onCreateBoardLabel,
   onCreateCard,
   onCreateList,
+  onMoveCard,
   onOpenCardComments,
   onOpenCardDetails,
+  onReorderList,
   onRenameList,
 }: DashboardKanbanProps) {
   const [openColumnMenuId, setOpenColumnMenuId] = useState<string | null>(null);
@@ -739,15 +1067,64 @@ export function DashboardKanban({
   const [draftsByListId, setDraftsByListId] = useState<Record<string, DraftCard | null>>(
     {},
   );
+  const [orderedLists, setOrderedLists] = useState<BoardList[]>(() =>
+    sortListsByPosition(lists),
+  );
+  const [orderedCardsByListId, setOrderedCardsByListId] = useState<CardsByListId>(
+    () => normalizeCardsByListId(sortListsByPosition(lists), cardsByListId),
+  );
+  const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const createListRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
-  const sortedLists = useMemo(
-    () =>
-      [...lists].sort((left, right) => Number(left.position) - Number(right.position)),
-    [lists],
+  const dragSnapshotRef = useRef<{
+    lists: BoardList[];
+    cardsByListId: CardsByListId;
+  } | null>(null);
+  const lastCardOverRef = useRef<string | null>(null);
+  const sortedLists = useMemo(() => sortListsByPosition(lists), [lists]);
+  const sensors = useSensors(
+    useSensor(BoardMouseSensor),
+    useSensor(BoardTouchSensor, {
+      activationConstraint: {
+        delay: TOUCH_DRAG_DELAY,
+        tolerance: 8,
+      },
+    }),
   );
+  const activeCard = useMemo(() => {
+    if (activeDrag?.type !== "card") {
+      return null;
+    }
+
+    const currentListId = findCardListId(orderedCardsByListId, activeDrag.cardId);
+    if (!currentListId) {
+      return null;
+    }
+
+    return (
+      orderedCardsByListId[currentListId]?.find((card) => card.id === activeDrag.cardId) ??
+      null
+    );
+  }, [activeDrag, orderedCardsByListId]);
+  const activeList = useMemo(
+    () =>
+      activeDrag?.type === "list"
+        ? orderedLists.find((list) => list.id === activeDrag.listId) ?? null
+        : null,
+    [activeDrag, orderedLists],
+  );
+
+  useEffect(() => {
+    if (activeDrag) {
+      return;
+    }
+
+    const nextLists = sortListsByPosition(lists);
+    setOrderedLists(nextLists);
+    setOrderedCardsByListId(normalizeCardsByListId(nextLists, cardsByListId));
+  }, [activeDrag, cardsByListId, lists]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -780,11 +1157,7 @@ export function DashboardKanban({
       return;
     }
 
-    setCreatingList(true);
-    setNewListTitle("");
-    setEditingListId(null);
-    setOpenColumnMenuId(null);
-    setConfirmArchiveListId(null);
+    openCreateListDraft();
   }, [activeBoardId, canManageLists, createListRequestId]);
 
   useEffect(() => {
@@ -809,7 +1182,20 @@ export function DashboardKanban({
     setConfirmArchiveListId(null);
     setListError(null);
     setDraftsByListId({});
-  }, [activeBoardId]);
+    setOrderedLists(sortListsByPosition(lists));
+    setOrderedCardsByListId(normalizeCardsByListId(sortListsByPosition(lists), cardsByListId));
+    setActiveDrag(null);
+    dragSnapshotRef.current = null;
+  }, [activeBoardId, cardsByListId, lists]);
+
+  function openCreateListDraft() {
+    setCreatingList(true);
+    setNewListTitle("");
+    setEditingListId(null);
+    setOpenColumnMenuId(null);
+    setConfirmArchiveListId(null);
+    setListError(null);
+  }
 
   async function handleCreateListSubmit() {
     const title = normalizeListTitle(newListTitle);
@@ -894,6 +1280,277 @@ export function DashboardKanban({
     }
   }
 
+  function resetDraggedState() {
+    const snapshot = dragSnapshotRef.current;
+    if (snapshot) {
+      setOrderedLists(snapshot.lists);
+      setOrderedCardsByListId(snapshot.cardsByListId);
+    }
+    dragSnapshotRef.current = null;
+    lastCardOverRef.current = null;
+    setActiveDrag(null);
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    const type = event.active.data.current?.type;
+    if (type === "list" && !canManageLists) {
+      return;
+    }
+
+    dragSnapshotRef.current = {
+      lists: orderedLists,
+      cardsByListId: orderedCardsByListId,
+    };
+
+    if (type === "card") {
+      lastCardOverRef.current = null;
+      setActiveDrag({
+        type: "card",
+        cardId: event.active.data.current?.cardId as string,
+        sourceListId: event.active.data.current?.listId as string,
+      });
+      return;
+    }
+
+    if (type === "list") {
+      setActiveDrag({
+        type: "list",
+        listId: event.active.data.current?.listId as string,
+      });
+    }
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    if (activeDrag?.type !== "card") {
+      return;
+    }
+
+    if (!event.over || event.active.id === event.over.id) {
+      return;
+    }
+
+    const overData = event.over?.data.current;
+    if (!overData) {
+      return;
+    }
+
+    const targetListId =
+      overData.type === "card"
+        ? (overData.listId as string)
+        : overData.type === "list-drop"
+          ? (overData.listId as string)
+          : null;
+
+    if (!targetListId) {
+      return;
+    }
+
+    const currentListId = findCardListId(orderedCardsByListId, activeDrag.cardId);
+    if (!currentListId) {
+      return;
+    }
+
+    const currentCards = [...(orderedCardsByListId[currentListId] ?? [])];
+    const sourceIndex = currentCards.findIndex((card) => card.id === activeDrag.cardId);
+    if (sourceIndex === -1) {
+      return;
+    }
+
+    if (currentListId === targetListId) {
+      const nextCards = [...currentCards];
+      const [movingCard] = nextCards.splice(sourceIndex, 1);
+      let targetIndex =
+        overData.type === "card"
+          ? nextCards.findIndex((card) => card.id === (overData.cardId as string))
+          : nextCards.length;
+
+      if (targetIndex === -1) {
+        targetIndex = nextCards.length;
+      }
+
+      const nextHoverKey = `${currentListId}:${targetIndex}:${activeDrag.cardId}`;
+      if (lastCardOverRef.current === nextHoverKey) {
+        return;
+      }
+
+      nextCards.splice(targetIndex, 0, movingCard);
+
+      const reorderedCards = renumberCards(nextCards, currentListId);
+      if (areCardOrdersEqual(reorderedCards, currentCards)) {
+        return;
+      }
+
+      lastCardOverRef.current = nextHoverKey;
+      setOrderedCardsByListId((current) => ({
+        ...current,
+        [currentListId]: reorderedCards,
+      }));
+      return;
+    }
+
+    const sourceCards = [...currentCards];
+    const targetCards = [...(orderedCardsByListId[targetListId] ?? [])];
+    const [movingCard] = sourceCards.splice(sourceIndex, 1);
+    let targetIndex =
+      overData.type === "card"
+        ? targetCards.findIndex((card) => card.id === (overData.cardId as string))
+        : targetCards.length;
+
+    if (targetIndex === -1) {
+      targetIndex = targetCards.length;
+    }
+
+    const nextHoverKey = `${currentListId}:${targetListId}:${targetIndex}:${activeDrag.cardId}`;
+    if (lastCardOverRef.current === nextHoverKey) {
+      return;
+    }
+
+    targetCards.splice(targetIndex, 0, {
+      ...movingCard,
+      listId: targetListId,
+    });
+
+    const nextSourceCards = renumberCards(sourceCards, currentListId);
+    const nextTargetCards = renumberCards(targetCards, targetListId);
+
+    if (
+      areCardOrdersEqual(nextSourceCards, orderedCardsByListId[currentListId] ?? []) &&
+      areCardOrdersEqual(nextTargetCards, orderedCardsByListId[targetListId] ?? [])
+    ) {
+      return;
+    }
+
+    lastCardOverRef.current = nextHoverKey;
+    setOrderedCardsByListId((current) => ({
+      ...current,
+      [currentListId]: nextSourceCards,
+      [targetListId]: nextTargetCards,
+    }));
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    if (!activeDrag) {
+      return;
+    }
+
+    const snapshot = dragSnapshotRef.current;
+    if (!event.over || !snapshot) {
+      resetDraggedState();
+      return;
+    }
+
+    if (activeDrag.type === "list") {
+      if (!canManageLists) {
+        resetDraggedState();
+        return;
+      }
+
+      const overType = event.over.data.current?.type;
+      const overListId =
+        overType === "list" || overType === "card" || overType === "list-drop"
+          ? (event.over.data.current?.listId as string)
+          : null;
+
+      if (!overListId || overListId === activeDrag.listId) {
+        dragSnapshotRef.current = null;
+        lastCardOverRef.current = null;
+        setActiveDrag(null);
+        return;
+      }
+
+      const fromIndex = orderedLists.findIndex((list) => list.id === activeDrag.listId);
+      const toIndex = orderedLists.findIndex((list) => list.id === overListId);
+
+      if (fromIndex === -1 || toIndex === -1) {
+        resetDraggedState();
+        return;
+      }
+
+      const nextLists = moveArrayItem(orderedLists, fromIndex, toIndex).map(
+        (list, index) => ({
+          ...list,
+          position: `${(index + 1) * 1000}`,
+        }),
+      );
+      const beforeId = toIndex > 0 ? nextLists[toIndex - 1]?.id : undefined;
+      const afterId =
+        toIndex < nextLists.length - 1 ? nextLists[toIndex + 1]?.id : undefined;
+
+      setOrderedLists(nextLists);
+      dragSnapshotRef.current = null;
+      lastCardOverRef.current = null;
+      setActiveDrag(null);
+
+      try {
+        await onReorderList({
+          boardId: activeBoardId,
+          listId: activeDrag.listId,
+          beforeId,
+          afterId,
+          toIndex,
+        });
+      } catch (error) {
+        setListError(
+          error instanceof Error ? error.message : "Unable to reorder list right now.",
+        );
+        setOrderedLists(snapshot.lists);
+      }
+
+      return;
+    }
+
+    const targetListId = findCardListId(orderedCardsByListId, activeDrag.cardId);
+    if (!targetListId) {
+      resetDraggedState();
+      return;
+    }
+
+    const targetCards = orderedCardsByListId[targetListId] ?? [];
+    const targetIndex = targetCards.findIndex((card) => card.id === activeDrag.cardId);
+    const sourceCardsBefore = snapshot.cardsByListId[activeDrag.sourceListId] ?? [];
+    const sourceIndexBefore = sourceCardsBefore.findIndex(
+      (card) => card.id === activeDrag.cardId,
+    );
+
+    if (targetIndex === -1) {
+      resetDraggedState();
+      return;
+    }
+
+    if (
+      activeDrag.sourceListId === targetListId &&
+      sourceIndexBefore === targetIndex
+    ) {
+      dragSnapshotRef.current = null;
+      lastCardOverRef.current = null;
+      setActiveDrag(null);
+      return;
+    }
+
+    const { beforeId, afterId } = getCardNeighbors(targetCards, targetIndex);
+
+    dragSnapshotRef.current = null;
+    lastCardOverRef.current = null;
+    setActiveDrag(null);
+
+    try {
+      await onMoveCard({
+        boardId: activeBoardId,
+        cardId: activeDrag.cardId,
+        sourceListId: activeDrag.sourceListId,
+        targetListId,
+        beforeId,
+        afterId,
+        targetIndex,
+      });
+    } catch (error) {
+      setListError(
+        error instanceof Error ? error.message : "Unable to move card right now.",
+      );
+      setOrderedCardsByListId(snapshot.cardsByListId);
+    }
+  }
+
   if (!activeBoardId) {
     return (
       <div className="flex h-full items-center justify-center px-6">
@@ -908,290 +1565,363 @@ export function DashboardKanban({
   }
 
   return (
-    <div className="scrollbar-hidden h-full min-h-0 w-full max-w-full overflow-x-auto overflow-y-hidden px-4 pb-0 pt-3">
-      <div className="flex h-full min-h-0 min-w-max items-start gap-4 pr-4">
-        {sortedLists.map((column) => {
-          const cards = [...(cardsByListId[column.id] ?? [])].sort(
-            (left, right) => Number(left.position) - Number(right.position),
-          );
-          const draft = draftsByListId[column.id];
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={(event) => void handleDragEnd(event)}
+      onDragCancel={resetDraggedState}
+    >
+      <div className="scrollbar-hidden h-full min-h-0 w-full max-w-full overflow-x-auto overflow-y-hidden px-4 pb-0 pt-3">
+        <SortableContext
+          items={orderedLists.map((list) => getListItemId(list.id))}
+          strategy={horizontalListSortingStrategy}
+        >
+          <div className="flex h-full min-h-0 min-w-max items-start gap-4 pr-4">
+            {orderedLists.map((column) => {
+              const cards = orderedCardsByListId[column.id] ?? [];
+              const draft = draftsByListId[column.id];
 
-          return (
-            <div
-              key={column.id}
-              className="relative h-full min-h-0 w-[296px] shrink-0 self-start"
-            >
-              <section className="ui-pressed-active flex max-h-full min-h-[220px] flex-col self-start overflow-visible rounded-[20px] border">
-                <header className="sticky top-0 z-[1] flex shrink-0 items-center justify-between bg-transparent px-4 py-3.5">
-                  {editingListId === column.id ? (
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
+              return (
+                <SortableListColumn
+                  key={column.id}
+                  column={column}
+                  canManageLists={canManageLists}
+                  isDraggingCard={activeDrag?.type === "card"}
+                >
+                  <section className="ui-pressed-active flex max-h-full min-h-[220px] flex-col self-start overflow-visible rounded-[20px] border">
+                    <header className="sticky top-0 z-[1] flex shrink-0 items-center justify-between bg-transparent px-4 py-3.5">
+                      {editingListId === column.id ? (
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <input
+                            data-no-dnd="true"
+                            ref={renameInputRef}
+                            value={editingTitle}
+                            onChange={(event) => setEditingTitle(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void handleRenameSubmit(column.id);
+                              }
+
+                              if (event.key === "Escape") {
+                                setEditingListId(null);
+                                setEditingTitle(column.title);
+                              }
+                            }}
+                            className="h-9 min-w-0 flex-1 border-b border-white/12 bg-transparent px-0 text-[14px] font-medium text-[#f2f2ef] outline-none transition focus:border-white/25"
+                          />
+                          <button
+                            data-no-dnd="true"
+                            type="button"
+                            onClick={() => void handleRenameSubmit(column.id)}
+                            disabled={pendingListId === column.id}
+                            className="rounded-[10px] p-2 text-[#d4d4cf] transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={`Save ${column.title}`}
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                          <button
+                            data-no-dnd="true"
+                            type="button"
+                            onClick={() => {
+                              setEditingListId(null);
+                              setEditingTitle(column.title);
+                            }}
+                            className="rounded-[10px] p-2 text-[#8a8a84] transition hover:bg-white/5 hover:text-white"
+                            aria-label={`Cancel renaming ${column.title}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <h3 className="truncate pr-3 text-[16px] font-semibold tracking-[-0.015em] text-[#f2f2ef]">
+                            {column.title}
+                          </h3>
+
+                          <div className="flex items-center gap-1">
+                            {canManageCards ? (
+                              <button
+                                data-no-dnd="true"
+                                type="button"
+                                onClick={() =>
+                                  setDraftsByListId((current) => ({
+                                    ...current,
+                                    [column.id]: { position: "top" },
+                                  }))
+                                }
+                                aria-label={`Create card at top of ${column.title}`}
+                                className="rounded-md p-1.5 text-[#727272] transition hover:bg-white/5 hover:text-white"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </button>
+                            ) : null}
+
+                            {canManageLists ? (
+                              <button
+                                data-no-dnd="true"
+                                type="button"
+                                onClick={() =>
+                                  setOpenColumnMenuId((currentValue) =>
+                                    currentValue === column.id ? null : column.id,
+                                  )
+                                }
+                                aria-label={`More options for ${column.title}`}
+                                className="rounded-md p-1.5 text-[#727272] transition hover:bg-white/5 hover:text-white"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </button>
+                            ) : null}
+                          </div>
+                        </>
+                      )}
+                    </header>
+
+                    {openColumnMenuId === column.id ? (
+                      <div
+                        ref={menuRef}
+                        className="absolute right-3 top-13 z-10 min-w-[174px] rounded-[14px] border border-white/8 bg-[#151515] p-1.5 shadow-[0_24px_50px_rgba(0,0,0,0.48)]"
+                      >
+                        {confirmArchiveListId === column.id ? (
+                          <div className="space-y-3 rounded-[12px] px-3 py-3">
+                            <div>
+                              <p className="text-[13px] font-medium text-[#f2d1cb]">
+                                Archive list?
+                              </p>
+                              <p className="mt-1 text-[11px] leading-5 text-[#bb8f87]">
+                                Cards stay intact, but this list will leave the active board view.
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                data-no-dnd="true"
+                                type="button"
+                                onClick={() => setConfirmArchiveListId(null)}
+                                className="ui-pressed-button rounded-[10px] border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] transition"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                data-no-dnd="true"
+                                type="button"
+                                onClick={() => void handleArchiveListSubmit(column.id)}
+                                disabled={pendingListId === column.id}
+                                className="ui-pressed-danger rounded-[10px] border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {pendingListId === column.id ? "Archiving" : "Archive"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              data-no-dnd="true"
+                              type="button"
+                              onClick={() => {
+                                setEditingListId(column.id);
+                                setEditingTitle(column.title);
+                                setOpenColumnMenuId(null);
+                              }}
+                              className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] text-[#d9d9d6] transition hover:bg-white/6 hover:text-white"
+                            >
+                              <span>Rename list</span>
+                            </button>
+                            <button
+                              data-no-dnd="true"
+                              type="button"
+                              onClick={() => setConfirmArchiveListId(column.id)}
+                              className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] text-[#f0b3a8] transition hover:bg-[#2b1512] hover:text-[#ffd5cd]"
+                            >
+                              <span>Archive list</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ) : null}
+
+                    <div className="scrollbar-hidden min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 pb-4 pt-1">
+                      <ListDropZone
+                        listId={column.id}
+                        isCardDragActive={activeDrag?.type === "card"}
+                      >
+                        <div className="flex min-h-full flex-col">
+                          <div className="space-y-3">
+                            {draft?.position === "top" ? (
+                              <CardDraftComposer
+                                boardId={activeBoardId}
+                                listId={column.id}
+                                boardLabels={boardLabels}
+                                boardMembers={boardMembers}
+                                onCreateBoardLabel={onCreateBoardLabel}
+                                onSubmit={onCreateCard}
+                                onCancel={() =>
+                                  setDraftsByListId((current) => ({
+                                    ...current,
+                                    [column.id]: null,
+                                  }))
+                                }
+                                position="top"
+                              />
+                            ) : null}
+
+                            <SortableContext
+                              items={cards.map((card) => getCardItemId(card.id))}
+                              strategy={verticalListSortingStrategy}
+                            >
+                              {cards.map((card) => (
+                                <SortableCardItem
+                                  key={card.id}
+                                  boardId={activeBoardId}
+                                  card={card}
+                                  canManageCards={canManageCards}
+                                  onOpenComments={onOpenCardComments}
+                                  onOpenDetails={onOpenCardDetails}
+                                />
+                              ))}
+                            </SortableContext>
+
+                            {draft?.position === "bottom" ? (
+                              <CardDraftComposer
+                                boardId={activeBoardId}
+                                listId={column.id}
+                                boardLabels={boardLabels}
+                                boardMembers={boardMembers}
+                                onCreateBoardLabel={onCreateBoardLabel}
+                                onSubmit={onCreateCard}
+                                onCancel={() =>
+                                  setDraftsByListId((current) => ({
+                                    ...current,
+                                    [column.id]: null,
+                                  }))
+                                }
+                                position="bottom"
+                              />
+                            ) : null}
+                          </div>
+
+                          <div aria-hidden="true" className="min-h-16 flex-1" />
+
+                          {canManageCards ? (
+                            <button
+                              data-no-dnd="true"
+                              type="button"
+                              onClick={() =>
+                                setDraftsByListId((current) => ({
+                                  ...current,
+                                  [column.id]: { position: "bottom" },
+                                }))
+                              }
+                              className="mt-2 flex w-full items-center justify-center gap-2 px-3 py-2 text-[12px] font-medium text-[#747470] transition hover:text-[#d7d7d3]"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              <span>New card</span>
+                            </button>
+                          ) : null}
+                        </div>
+                      </ListDropZone>
+                    </div>
+                  </section>
+                </SortableListColumn>
+              );
+            })}
+
+            {canManageLists && !creatingList ? (
+              <div className="relative h-full min-h-0 w-[296px] shrink-0 self-start">
+                <button
+                  data-no-dnd="true"
+                  type="button"
+                  onClick={openCreateListDraft}
+                  className="ui-pressed-active flex h-auto min-h-[72px] w-full items-center justify-start gap-2 rounded-[20px] border border-dashed px-4 py-4 text-left text-[13px] font-medium text-[#d7d7d3] transition hover:text-white"
+                >
+                  <Plus className="h-4 w-4 text-[#8a8a84]" />
+                  <span>New list</span>
+                </button>
+              </div>
+            ) : null}
+
+            {canManageLists && creatingList ? (
+              <div
+                ref={createListRef}
+                className="relative h-full min-h-0 w-[296px] shrink-0 self-start"
+              >
+                <section className="ui-pressed-active flex max-h-full min-h-[220px] flex-col overflow-hidden rounded-[20px] border">
+                  <div className="px-4 py-3.5">
+                    <div className="flex items-center gap-2">
                       <input
-                        ref={renameInputRef}
-                        value={editingTitle}
-                        onChange={(event) => setEditingTitle(event.target.value)}
+                        data-no-dnd="true"
+                        ref={inputRef}
+                        value={newListTitle}
+                        onChange={(event) => setNewListTitle(event.target.value)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") {
                             event.preventDefault();
-                            void handleRenameSubmit(column.id);
+                            void handleCreateListSubmit();
                           }
 
                           if (event.key === "Escape") {
-                            setEditingListId(null);
-                            setEditingTitle(column.title);
+                            setCreatingList(false);
+                            setNewListTitle("");
                           }
                         }}
-                        className="h-9 min-w-0 flex-1 border-b border-white/12 bg-transparent px-0 text-[14px] font-medium text-[#f2f2ef] outline-none transition focus:border-white/25"
+                        placeholder="New list"
+                        className="h-9 min-w-0 flex-1 border-b border-white/12 bg-transparent px-0 text-[14px] font-medium text-[#f2f2ef] outline-none transition placeholder:text-[#70706b] focus:border-white/25"
                       />
                       <button
+                        data-no-dnd="true"
                         type="button"
-                        onClick={() => void handleRenameSubmit(column.id)}
-                        disabled={pendingListId === column.id}
+                        onClick={() => void handleCreateListSubmit()}
+                        disabled={!normalizeListTitle(newListTitle) || pendingListId === "__new__"}
                         className="rounded-[10px] p-2 text-[#d4d4cf] transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                        aria-label={`Save ${column.title}`}
+                        aria-label="Save new list"
                       >
                         <Check className="h-4 w-4" />
                       </button>
                       <button
+                        data-no-dnd="true"
                         type="button"
                         onClick={() => {
-                          setEditingListId(null);
-                          setEditingTitle(column.title);
+                          setCreatingList(false);
+                          setNewListTitle("");
                         }}
                         className="rounded-[10px] p-2 text-[#8a8a84] transition hover:bg-white/5 hover:text-white"
-                        aria-label={`Cancel renaming ${column.title}`}
+                        aria-label="Cancel new list"
                       >
                         <X className="h-4 w-4" />
                       </button>
                     </div>
-                  ) : (
-                    <>
-                      <h3 className="truncate pr-3 text-[16px] font-semibold tracking-[-0.015em] text-[#f2f2ef]">
-                        {column.title}
-                      </h3>
-
-                      <div className="flex items-center gap-1">
-                        {canManageCards ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setDraftsByListId((current) => ({
-                                ...current,
-                                [column.id]: { position: "top" },
-                              }))
-                            }
-                            aria-label={`Create card at top of ${column.title}`}
-                            className="rounded-md p-1.5 text-[#727272] transition hover:bg-white/5 hover:text-white"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </button>
-                        ) : null}
-
-                        {canManageLists ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setOpenColumnMenuId((currentValue) =>
-                                currentValue === column.id ? null : column.id,
-                              )
-                            }
-                            aria-label={`More options for ${column.title}`}
-                            className="rounded-md p-1.5 text-[#727272] transition hover:bg-white/5 hover:text-white"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </button>
-                        ) : null}
-                      </div>
-                    </>
-                  )}
-                </header>
-
-                {openColumnMenuId === column.id ? (
-                  <div
-                    ref={menuRef}
-                    className="absolute right-3 top-13 z-10 min-w-[174px] rounded-[14px] border border-white/8 bg-[#151515] p-1.5 shadow-[0_24px_50px_rgba(0,0,0,0.48)]"
-                  >
-                    {confirmArchiveListId === column.id ? (
-                      <div className="space-y-3 rounded-[12px] px-3 py-3">
-                        <div>
-                          <p className="text-[13px] font-medium text-[#f2d1cb]">
-                            Archive list?
-                          </p>
-                          <p className="mt-1 text-[11px] leading-5 text-[#bb8f87]">
-                            Cards stay intact, but this list will leave the active board view.
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setConfirmArchiveListId(null)}
-                            className="ui-pressed-button rounded-[10px] border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] transition"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleArchiveListSubmit(column.id)}
-                            disabled={pendingListId === column.id}
-                            className="ui-pressed-danger rounded-[10px] border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {pendingListId === column.id ? "Archiving" : "Archive"}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingListId(column.id);
-                            setEditingTitle(column.title);
-                            setOpenColumnMenuId(null);
-                          }}
-                          className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] text-[#d9d9d6] transition hover:bg-white/6 hover:text-white"
-                        >
-                          <span>Rename list</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmArchiveListId(column.id)}
-                          className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] text-[#f0b3a8] transition hover:bg-[#2b1512] hover:text-[#ffd5cd]"
-                        >
-                          <span>Archive list</span>
-                        </button>
-                      </>
-                    )}
                   </div>
-                ) : null}
-
-                <div className="scrollbar-hidden min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 pb-4 pt-1">
-                  <div className="flex min-h-full flex-col">
-                    <div className="space-y-3">
-                      {draft?.position === "top" ? (
-                        <CardDraftComposer
-                          boardId={activeBoardId}
-                          listId={column.id}
-                          boardLabels={boardLabels}
-                          boardMembers={boardMembers}
-                          onCreateBoardLabel={onCreateBoardLabel}
-                          onSubmit={onCreateCard}
-                          onCancel={() =>
-                            setDraftsByListId((current) => ({
-                              ...current,
-                              [column.id]: null,
-                            }))
-                          }
-                          position="top"
-                        />
-                      ) : null}
-
-                      {cards.map((card) => (
-                        <BoardCardItem
-                          key={card.id}
-                          boardId={activeBoardId}
-                          card={card}
-                          onOpenComments={onOpenCardComments}
-                          onOpenDetails={onOpenCardDetails}
-                        />
-                      ))}
-
-                      {draft?.position === "bottom" ? (
-                        <CardDraftComposer
-                          boardId={activeBoardId}
-                          listId={column.id}
-                          boardLabels={boardLabels}
-                          boardMembers={boardMembers}
-                          onCreateBoardLabel={onCreateBoardLabel}
-                          onSubmit={onCreateCard}
-                          onCancel={() =>
-                            setDraftsByListId((current) => ({
-                              ...current,
-                              [column.id]: null,
-                            }))
-                          }
-                          position="bottom"
-                        />
-                      ) : null}
-                    </div>
-
-                    <div aria-hidden="true" className="min-h-16 flex-1" />
-
-                    {canManageCards ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDraftsByListId((current) => ({
-                            ...current,
-                            [column.id]: { position: "bottom" },
-                          }))
-                        }
-                        className="mt-2 flex w-full items-center justify-center gap-2 px-3 py-2 text-[12px] font-medium text-[#747470] transition hover:text-[#d7d7d3]"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        <span>New card</span>
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              </section>
-            </div>
-          );
-        })}
-
-        {canManageLists && creatingList ? (
-          <div
-            ref={createListRef}
-            className="relative h-full min-h-0 w-[296px] shrink-0 self-start"
-          >
-            <section className="ui-pressed-active flex max-h-full min-h-[220px] flex-col overflow-hidden rounded-[20px] border">
-              <div className="px-4 py-3.5">
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={inputRef}
-                    value={newListTitle}
-                    onChange={(event) => setNewListTitle(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void handleCreateListSubmit();
-                      }
-
-                      if (event.key === "Escape") {
-                        setCreatingList(false);
-                        setNewListTitle("");
-                      }
-                    }}
-                    placeholder="New list"
-                    className="h-9 min-w-0 flex-1 border-b border-white/12 bg-transparent px-0 text-[14px] font-medium text-[#f2f2ef] outline-none transition placeholder:text-[#70706b] focus:border-white/25"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void handleCreateListSubmit()}
-                    disabled={!normalizeListTitle(newListTitle) || pendingListId === "__new__"}
-                    className="rounded-[10px] p-2 text-[#d4d4cf] transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-label="Save new list"
-                  >
-                    <Check className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCreatingList(false);
-                      setNewListTitle("");
-                    }}
-                    className="rounded-[10px] p-2 text-[#8a8a84] transition hover:bg-white/5 hover:text-white"
-                    aria-label="Cancel new list"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
+                  <div className="min-h-[146px] flex-1 px-3 pb-4" />
+                </section>
               </div>
-              <div className="min-h-[146px] flex-1 px-3 pb-4" />
-            </section>
+            ) : null}
           </div>
-        ) : null}
+        </SortableContext>
+
+        {listError ? <p className="px-1 pt-3 text-sm text-[#f07f6a]">{listError}</p> : null}
       </div>
 
-      {listError ? <p className="px-1 pt-3 text-sm text-[#f07f6a]">{listError}</p> : null}
-    </div>
+      <DragOverlay>
+        {activeDrag?.type === "card" && activeCard ? (
+          <motion.div initial={{ scale: 1 }} animate={{ scale: 1.03, rotate: -1 }}>
+            <BoardCardBody
+              boardId={activeBoardId}
+              card={activeCard}
+              onOpenComments={onOpenCardComments}
+              onOpenDetails={onOpenCardDetails}
+              className="w-[272px] shadow-[0_30px_90px_rgba(0,0,0,0.5)]"
+            />
+          </motion.div>
+        ) : null}
+
+        {activeDrag?.type === "list" && activeList ? (
+          <ListOverlay
+            title={activeList.title}
+            cardCount={orderedCardsByListId[activeList.id]?.length ?? 0}
+          />
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }

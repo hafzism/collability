@@ -127,6 +127,27 @@ export function reorderCard(input: {
   );
 }
 
+export function moveCard(input: {
+  boardId: string;
+  listId: string;
+  cardId: string;
+  targetListId: string;
+  beforeId?: string;
+  afterId?: string;
+}) {
+  return apiRequest<BoardCard>(
+    `/boards/${input.boardId}/lists/${input.listId}/cards/${input.cardId}/move`,
+    {
+      method: "PATCH",
+      body: {
+        targetListId: input.targetListId,
+        beforeId: input.beforeId,
+        afterId: input.afterId,
+      },
+    },
+  );
+}
+
 export function getCardDetail(input: {
   boardId: string;
   listId: string;

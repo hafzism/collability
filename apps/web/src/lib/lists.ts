@@ -79,6 +79,24 @@ export function updateList(input: {
   });
 }
 
+export function reorderList(input: {
+  boardId: string;
+  listId: string;
+  beforeId?: string;
+  afterId?: string;
+}) {
+  return apiRequest<BoardList>(
+    `/boards/${input.boardId}/lists/${input.listId}/reorder`,
+    {
+      method: "PATCH",
+      body: {
+        beforeId: input.beforeId,
+        afterId: input.afterId,
+      },
+    },
+  );
+}
+
 export function deleteList(input: { boardId: string; listId: string }) {
   return apiRequest<void>(`/boards/${input.boardId}/lists/${input.listId}`, {
     method: "DELETE",

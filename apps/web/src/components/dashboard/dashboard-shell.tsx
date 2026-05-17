@@ -21,6 +21,7 @@ import {
   getCardActivity,
   getCardDetail,
   listCards,
+  moveCard as moveCardRequest,
   reorderCard,
   updateCard as updateCardRequest,
 } from "@/lib/cards";
@@ -28,6 +29,7 @@ import {
   createList,
   deleteList,
   listBoardLists,
+  reorderList as reorderListRequest,
   updateList,
 } from "@/lib/lists";
 import { cn } from "@/lib/utils";
@@ -76,6 +78,40 @@ import type {
 
 const initialWorkspaces: WorkspaceSummary[] = [];
 const initialWorkspaceActivity: Record<string, WorkspaceActivityItem[]> = {};
+
+function getSortedLists(lists: BoardList[]) {
+  return [...lists].sort((left, right) => Number(left.position) - Number(right.position));
+}
+
+function getSortedCards(cards: BoardCard[]) {
+  return [...cards].sort((left, right) => Number(left.position) - Number(right.position));
+}
+
+function renumberLists(lists: BoardList[]) {
+  return lists.map((list, index) => ({
+    ...list,
+    position: `${(index + 1) * 1000}`,
+  }));
+}
+
+function renumberCards(cards: BoardCard[], listId: string) {
+  return cards.map((card, index) => ({
+    ...card,
+    listId,
+    position: `${(index + 1) * 1000}`,
+  }));
+}
+
+function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
+  if (fromIndex === toIndex) {
+    return items;
+  }
+
+  const next = [...items];
+  const [item] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, item);
+  return next;
+}
 
 export function DashboardShell({ user }: { user: AuthUser }) {
   const [boardActivityById, setBoardActivityById] = useState<
@@ -760,6 +796,40 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     await refreshBoardActivity(input.boardId);
   }
 
+  async function handleReorderList(input: {
+    boardId: string;
+    listId: string;
+    beforeId?: string;
+    afterId?: string;
+    toIndex: number;
+  }) {
+    const previousLists = boardListsById[input.boardId] ?? [];
+    const orderedLists = getSortedLists(previousLists);
+    const fromIndex = orderedLists.findIndex((list) => list.id === input.listId);
+
+    if (fromIndex === -1 || fromIndex === input.toIndex) {
+      return;
+    }
+
+    const nextLists = renumberLists(moveItem(orderedLists, fromIndex, input.toIndex));
+
+    setBoardListsById((current) => ({
+      ...current,
+      [input.boardId]: nextLists,
+    }));
+
+    try {
+      await reorderListRequest(input);
+      await refreshBoardActivity(input.boardId);
+    } catch (error) {
+      setBoardListsById((current) => ({
+        ...current,
+        [input.boardId]: previousLists,
+      }));
+      throw error;
+    }
+  }
+
   async function handleCreateBoardLabel(input: {
     boardId: string;
     name: string;
@@ -795,6 +865,109 @@ export function DashboardShell({ user }: { user: AuthUser }) {
 
     await refreshListCards(input.boardId, input.listId);
     await refreshBoardActivity(input.boardId);
+  }
+
+  async function handleMoveCard(input: {
+    boardId: string;
+    cardId: string;
+    sourceListId: string;
+    targetListId: string;
+    beforeId?: string;
+    afterId?: string;
+    targetIndex: number;
+  }) {
+    const sourceCards = getSortedCards(cardsByListId[input.sourceListId] ?? []);
+    const targetCards =
+      input.sourceListId === input.targetListId
+        ? sourceCards
+        : getSortedCards(cardsByListId[input.targetListId] ?? []);
+    const movingCard = sourceCards.find((card) => card.id === input.cardId);
+
+    if (!movingCard) {
+      return;
+    }
+
+    const previousCardsByListId = {
+      [input.sourceListId]: cardsByListId[input.sourceListId] ?? [],
+      [input.targetListId]: cardsByListId[input.targetListId] ?? [],
+    };
+
+    if (input.sourceListId === input.targetListId) {
+      const fromIndex = sourceCards.findIndex((card) => card.id === input.cardId);
+
+      if (fromIndex === -1 || fromIndex === input.targetIndex) {
+        return;
+      }
+
+      const nextCards = renumberCards(
+        moveItem(sourceCards, fromIndex, input.targetIndex),
+        input.sourceListId,
+      );
+
+      setCardsByListId((current) => ({
+        ...current,
+        [input.sourceListId]: nextCards,
+      }));
+
+      try {
+        await reorderCard({
+          boardId: input.boardId,
+          listId: input.sourceListId,
+          cardId: input.cardId,
+          beforeId: input.beforeId,
+          afterId: input.afterId,
+        });
+        await refreshBoardActivity(input.boardId);
+      } catch (error) {
+        setCardsByListId((current) => ({
+          ...current,
+          [input.sourceListId]: previousCardsByListId[input.sourceListId],
+        }));
+        throw error;
+      }
+
+      return;
+    }
+
+    const remainingSourceCards = sourceCards.filter((card) => card.id !== input.cardId);
+    const nextTargetCards = [...targetCards];
+
+    nextTargetCards.splice(input.targetIndex, 0, {
+      ...movingCard,
+      listId: input.targetListId,
+    });
+
+    setCardsByListId((current) => ({
+      ...current,
+      [input.sourceListId]: renumberCards(remainingSourceCards, input.sourceListId),
+      [input.targetListId]: renumberCards(nextTargetCards, input.targetListId),
+    }));
+
+    try {
+      await moveCardRequest({
+        boardId: input.boardId,
+        listId: input.sourceListId,
+        cardId: input.cardId,
+        targetListId: input.targetListId,
+        beforeId: input.beforeId,
+        afterId: input.afterId,
+      });
+      await Promise.all([
+        refreshBoardActivity(input.boardId),
+        refreshCardDetail({
+          boardId: input.boardId,
+          listId: input.targetListId,
+          cardId: input.cardId,
+        }).catch(() => undefined),
+      ]);
+    } catch (error) {
+      setCardsByListId((current) => ({
+        ...current,
+        [input.sourceListId]: previousCardsByListId[input.sourceListId],
+        [input.targetListId]: previousCardsByListId[input.targetListId],
+      }));
+      throw error;
+    }
   }
 
   async function handleOpenCardDetail(input: {
@@ -1081,6 +1254,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
                 onCreateBoardLabel={handleCreateBoardLabel}
                 onCreateCard={handleCreateCard}
                 onCreateList={handleCreateList}
+                onMoveCard={handleMoveCard}
                 onOpenCardComments={(input) =>
                   void handleOpenCardDetail({
                     ...input,
@@ -1093,6 +1267,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
                     initialTab: "details",
                   })
                 }
+                onReorderList={handleReorderList}
                 onRenameList={handleRenameList}
               />
             </div>

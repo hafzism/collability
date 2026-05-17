@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import {
   deleteWorkspace,
   getWorkspace,
+  getWorkspaceActivity,
   inviteWorkspaceMember,
   joinWorkspace,
   leaveWorkspace,
@@ -392,6 +393,38 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   useEffect(() => {
     let isMounted = true;
 
+    async function loadWorkspaceActivity() {
+      if (!workspaceDetailsWorkspaceId) {
+        return;
+      }
+
+      try {
+        const activity = await getWorkspaceActivity(workspaceDetailsWorkspaceId);
+        if (!isMounted) {
+          return;
+        }
+
+        setWorkspaceActivityById((current) => ({
+          ...current,
+          [workspaceDetailsWorkspaceId]: activity,
+        }));
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+      }
+    }
+
+    void loadWorkspaceActivity();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [workspaceDetailsWorkspaceId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
     async function loadWorkspaceMembersForBoardCreation() {
       if (!isCreateBoardModalOpen || !activeWorkspaceId) {
         setBoardCreationWorkspaceDetail(null);
@@ -491,6 +524,14 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     setWorkspaceDetails(refreshedWorkspace);
   }
 
+  async function refreshWorkspaceActivity(workspaceId: string) {
+    const activity = await getWorkspaceActivity(workspaceId);
+    setWorkspaceActivityById((current) => ({
+      ...current,
+      [workspaceId]: activity,
+    }));
+  }
+
   async function refreshBoardDetail(boardId: string) {
     const detail = await getBoard(boardId);
     setBoardDetailsById((current) => ({
@@ -551,13 +592,10 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     const workspace = await createWorkspace(values);
 
     setWorkspaces((current) => [...current, workspace]);
-    setWorkspaceActivityById((current) => ({
-      ...current,
-      [workspace.id]: [],
-    }));
     setActiveWorkspaceId(workspace.id);
     setIsCreateWorkspaceModalOpen(false);
     setIsWorkspaceMenuOpen(false);
+    await refreshWorkspaceActivity(workspace.id);
   }
 
   async function handleCreateBoard(values: {
@@ -590,6 +628,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
       },
     }));
     setActiveBoardId(board.id);
+    await refreshWorkspaceActivity(activeWorkspaceId);
 
     return board;
   }
@@ -657,6 +696,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
 
     await refreshBoardDetail(updatedBoard.id);
     await refreshBoardActivity(updatedBoard.id);
+    await refreshWorkspaceActivity(activeWorkspaceId);
   }
 
   async function handleAddBoardMember(input: {
@@ -695,6 +735,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
       ...current,
       [input.boardId]: [...(current[input.boardId] ?? []), list],
     }));
+    await refreshBoardActivity(input.boardId);
   }
 
   async function handleRenameList(input: {
@@ -710,11 +751,13 @@ export function DashboardShell({ user }: { user: AuthUser }) {
         list.id === updatedList.id ? updatedList : list,
       ),
     }));
+    await refreshBoardActivity(input.boardId);
   }
 
   async function handleArchiveList(input: { boardId: string; listId: string }) {
     await deleteList(input);
     await refreshBoardLists(input.boardId);
+    await refreshBoardActivity(input.boardId);
   }
 
   async function handleCreateBoardLabel(input: {
@@ -724,6 +767,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   }) {
     const label = await createBoardLabel(input);
     await refreshBoardDetail(input.boardId);
+    await refreshBoardActivity(input.boardId);
     return label;
   }
 
@@ -750,6 +794,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     }
 
     await refreshListCards(input.boardId, input.listId);
+    await refreshBoardActivity(input.boardId);
   }
 
   async function handleOpenCardDetail(input: {
@@ -793,6 +838,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
       refreshListCards(input.boardId, input.listId),
       refreshCardDetail(input),
       refreshCardActivity(input),
+      refreshBoardActivity(input.boardId),
     ]);
   }
 
@@ -802,7 +848,10 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     cardId: string;
   }) {
     await deleteCardRequest(input);
-    await refreshListCards(input.boardId, input.listId);
+    await Promise.all([
+      refreshListCards(input.boardId, input.listId),
+      refreshBoardActivity(input.boardId),
+    ]);
     setCardDetailsById((current) => {
       const next = { ...current };
       delete next[input.cardId];
@@ -830,6 +879,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     });
     setActiveWorkspaceId(workspace.id);
     setIsJoinWorkspaceModalOpen(false);
+    await refreshWorkspaceActivity(workspace.id);
   }
 
   async function handleUpdateWorkspace(
@@ -851,6 +901,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
         ? { ...current, ...updatedWorkspace }
         : current,
     );
+    await refreshWorkspaceActivity(workspaceId);
   }
 
   async function handleDeleteWorkspace(workspaceId: string) {
@@ -897,6 +948,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   }) {
     await updateWorkspaceMemberRole(input);
     await refreshWorkspaceDetails(input.workspaceId);
+    await refreshWorkspaceActivity(input.workspaceId);
   }
 
   async function handleRemoveWorkspaceMember(input: {
@@ -905,6 +957,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
   }) {
     await removeWorkspaceMember(input);
     await refreshWorkspaceDetails(input.workspaceId);
+    await refreshWorkspaceActivity(input.workspaceId);
   }
 
   async function handleLeaveWorkspace(workspaceId: string) {

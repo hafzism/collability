@@ -1,5 +1,6 @@
 import axios, { AxiosError } from "axios";
 import type {
+  WorkspaceActivityItem,
   WorkspaceDetail,
   WorkspaceInviteResponse,
   WorkspaceMember,
@@ -74,6 +75,12 @@ export function listWorkspaces() {
 
 export function getWorkspace(workspaceId: string) {
   return apiRequest<WorkspaceDetailResponse>(`/workspaces/${workspaceId}`, {
+    method: "GET",
+  });
+}
+
+export function getWorkspaceActivity(workspaceId: string) {
+  return apiRequest<WorkspaceActivityItem[]>(`/workspaces/${workspaceId}/activity`, {
     method: "GET",
   });
 }

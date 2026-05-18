@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
+
+import {
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { getErrorMessage, type AuthUser } from "@/lib/auth";
 import {
@@ -58,6 +64,7 @@ import type {
   BoardSummary,
   BoardVisibility,
 } from "./board-types";
+import { dashboardQueryKeys } from "./dashboard-query-keys";
 import {
   getSortedCards,
   getSortedLists,
@@ -65,384 +72,265 @@ import {
   renumberCards,
   renumberLists,
 } from "./dashboard-shell-utils";
+import { type CardDetailModalState, useDashboardUiState } from "./use-dashboard-ui-state";
 import type {
   WorkspaceActivityItem,
+  WorkspaceDetail,
   WorkspaceInviteResponse,
   WorkspaceSummary,
 } from "./workspace-types";
-import { type CardDetailModalState, useDashboardUiState } from "./use-dashboard-ui-state";
-
-const initialWorkspaces: WorkspaceSummary[] = [];
-const initialWorkspaceActivity: Record<string, WorkspaceActivityItem[]> = {};
 
 export function useDashboardShell(user: AuthUser) {
   const ui = useDashboardUiState();
+  const queryClient = useQueryClient();
+
   const {
     accountMenuRef,
     activeBoardId,
     activeWorkspaceId,
+    cardDetailModalState,
+    createListRequestId,
     isAccountMenuOpen,
+    isBoardActivityModalOpen,
     isBoardMembersModalOpen,
+    isBoardSettingsModalOpen,
     isCreateBoardModalOpen,
+    isCreateWorkspaceModalOpen,
+    isJoinWorkspaceModalOpen,
+    isSidebarOpen,
     isWorkspaceMenuOpen,
     setActiveBoardId,
     setActiveWorkspaceId,
-    setBoardCreationWorkspaceDetail,
-    setBoardManagementWorkspaceDetail,
+    setCardDetailModalState,
+    setCreateListRequestId,
     setIsAccountMenuOpen,
+    setIsBoardActivityModalOpen,
+    setIsBoardMembersModalOpen,
+    setIsBoardSettingsModalOpen,
+    setIsCreateBoardModalOpen,
+    setIsCreateWorkspaceModalOpen,
+    setIsJoinWorkspaceModalOpen,
+    setIsSidebarOpen,
     setIsWorkspaceMenuOpen,
     setWorkspaceDetails,
-    setWorkspaceErrorMessage,
+    setWorkspaceDetailsWorkspaceId,
     workspaceDetailsWorkspaceId,
     workspaceMenuRef,
   } = ui;
-  const [boardActivityById, setBoardActivityById] = useState<
-    Record<string, BoardActivityItem[]>
-  >({});
-  const [boardDetailsById, setBoardDetailsById] = useState<Record<string, BoardDetail>>(
-    {},
+
+  const workspacesQuery = useQuery({
+    queryKey: dashboardQueryKeys.workspaces.all,
+    queryFn: listWorkspaces,
+  });
+
+  const workspaces = useMemo(
+    () => workspacesQuery.data ?? [],
+    [workspacesQuery.data],
   );
-  const [cardsByListId, setCardsByListId] = useState<Record<string, BoardCard[]>>(
-    {},
-  );
-  const [cardActivityById, setCardActivityById] = useState<
-    Record<string, BoardCardActivityItem[]>
-  >({});
-  const [cardDetailsById, setCardDetailsById] = useState<
-    Record<string, BoardCardDetail>
-  >({});
-  const [boardListsById, setBoardListsById] = useState<Record<string, BoardList[]>>(
-    {},
-  );
-  const [boardsByWorkspaceId, setBoardsByWorkspaceId] = useState<
-    Record<string, BoardSummary[]>
-  >({});
-  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>(initialWorkspaces);
-  const [workspaceActivityById, setWorkspaceActivityById] = useState<
-    Record<string, WorkspaceActivityItem[]>
-  >(initialWorkspaceActivity);
+
+  useEffect(() => {
+    setActiveWorkspaceId((currentActiveWorkspaceId) => {
+      if (
+        currentActiveWorkspaceId &&
+        workspaces.some((workspace) => workspace.id === currentActiveWorkspaceId)
+      ) {
+        return currentActiveWorkspaceId;
+      }
+
+      return workspaces[0]?.id ?? "";
+    });
+  }, [setActiveWorkspaceId, workspaces]);
 
   const activeWorkspace = useMemo(
     () => workspaces.find((item) => item.id === activeWorkspaceId) ?? null,
     [activeWorkspaceId, workspaces],
   );
+
+  const boardsQuery = useQuery({
+    queryKey: dashboardQueryKeys.boards.list(activeWorkspaceId),
+    queryFn: () => listWorkspaceBoards(activeWorkspaceId),
+    enabled: Boolean(activeWorkspaceId),
+  });
+
   const activeBoards = useMemo(
-    () => (activeWorkspaceId ? boardsByWorkspaceId[activeWorkspaceId] ?? [] : []),
-    [activeWorkspaceId, boardsByWorkspaceId],
+    () => boardsQuery.data ?? [],
+    [boardsQuery.data],
   );
+
+  useEffect(() => {
+    if (!activeWorkspaceId) {
+      setActiveBoardId("");
+      return;
+    }
+
+    setActiveBoardId((currentActiveBoardId) => {
+      if (activeBoards.some((board) => board.id === currentActiveBoardId)) {
+        return currentActiveBoardId;
+      }
+
+      return activeBoards[0]?.id ?? "";
+    });
+  }, [activeBoards, activeWorkspaceId, setActiveBoardId]);
+
   const activeBoard = useMemo(
     () => activeBoards.find((item) => item.id === activeBoardId) ?? activeBoards[0] ?? null,
     [activeBoardId, activeBoards],
   );
-  const activeBoardDetail = useMemo(
-    () => (activeBoard ? boardDetailsById[activeBoard.id] ?? null : null),
-    [activeBoard, boardDetailsById],
-  );
+
+  const activeBoardDetailQuery = useQuery({
+    queryKey: dashboardQueryKeys.boards.detail(activeBoardId),
+    queryFn: () => getBoard(activeBoardId),
+    enabled: Boolean(activeBoardId),
+  });
+
+  const activeBoardDetail = activeBoardDetailQuery.data ?? null;
+
+  const activeBoardListsQuery = useQuery({
+    queryKey: dashboardQueryKeys.boards.lists(activeBoardId),
+    queryFn: () => listBoardLists(activeBoardId),
+    enabled: Boolean(activeBoardId),
+  });
+
   const activeBoardLists = useMemo(
-    () => (activeBoard ? boardListsById[activeBoard.id] ?? [] : []),
-    [activeBoard, boardListsById],
-  );
-  const userInitials = useMemo(
-    () => user.name.trim().slice(0, 2).toUpperCase() || "U",
-    [user.name],
+    () => activeBoardListsQuery.data ?? [],
+    [activeBoardListsQuery.data],
   );
 
-  useEffect(() => {
-    let isMounted = true;
+  const cardListQueries = useQueries({
+    queries: activeBoardLists.map((list) => ({
+      queryKey: dashboardQueryKeys.cards.list(activeBoardId, list.id),
+      queryFn: () => listCards(activeBoardId, list.id),
+      enabled: Boolean(activeBoardId),
+    })),
+  });
 
-    async function loadWorkspaces() {
-      try {
-        const loadedWorkspaces = await listWorkspaces();
-        if (!isMounted) {
-          return;
-        }
+  const cardsByListId = useMemo<Record<string, BoardCard[]>>(
+    () =>
+      Object.fromEntries(
+        activeBoardLists.map((list, index) => [list.id, cardListQueries[index]?.data ?? []]),
+      ),
+    [activeBoardLists, cardListQueries],
+  );
 
-        setWorkspaces(loadedWorkspaces);
-        setActiveWorkspaceId((currentActiveWorkspaceId) => {
-          if (
-            currentActiveWorkspaceId &&
-            loadedWorkspaces.some(
-              (workspace) => workspace.id === currentActiveWorkspaceId,
-            )
-          ) {
-            return currentActiveWorkspaceId;
-          }
+  const workspaceDetailsQuery = useQuery({
+    queryKey: dashboardQueryKeys.workspaces.detail(workspaceDetailsWorkspaceId ?? ""),
+    queryFn: () => getWorkspace(workspaceDetailsWorkspaceId!),
+    enabled: Boolean(workspaceDetailsWorkspaceId),
+  });
 
-          return loadedWorkspaces[0]?.id ?? "";
-        });
-        setWorkspaceErrorMessage(null);
-      } catch (error) {
-        if (isMounted) {
-          setWorkspaceErrorMessage(
-            getErrorMessage(error, "Unable to load your workspaces."),
-          );
-        }
-      }
-    }
-
-    void loadWorkspaces();
-    return () => {
-      isMounted = false;
-    };
-  }, [setActiveWorkspaceId, setWorkspaceErrorMessage]);
+  const workspaceDetails = workspaceDetailsQuery.data ?? null;
 
   useEffect(() => {
-    let isMounted = true;
+    setWorkspaceDetails(workspaceDetails);
+  }, [setWorkspaceDetails, workspaceDetails]);
 
-    async function loadBoards() {
-      if (!activeWorkspaceId) {
-        setActiveBoardId("");
-        return;
-      }
+  const workspaceActivityQuery = useQuery({
+    queryKey: dashboardQueryKeys.workspaces.activity(workspaceDetailsWorkspaceId ?? ""),
+    queryFn: () => getWorkspaceActivity(workspaceDetailsWorkspaceId!),
+    enabled: Boolean(workspaceDetailsWorkspaceId),
+  });
 
-      try {
-        const boards = await listWorkspaceBoards(activeWorkspaceId);
-        if (!isMounted) {
-          return;
-        }
+  const boardCreationWorkspaceDetailQuery = useQuery({
+    queryKey: dashboardQueryKeys.workspaces.detail(activeWorkspaceId),
+    queryFn: () => getWorkspace(activeWorkspaceId),
+    enabled: isCreateBoardModalOpen && Boolean(activeWorkspaceId),
+  });
 
-        setBoardsByWorkspaceId((current) => ({
-          ...current,
-          [activeWorkspaceId]: boards,
-        }));
-        setWorkspaceErrorMessage(null);
-        setActiveBoardId((currentActiveBoardId) => {
-          if (boards.some((board) => board.id === currentActiveBoardId)) {
-            return currentActiveBoardId;
-          }
+  const boardManagementWorkspaceDetailQuery = useQuery({
+    queryKey: dashboardQueryKeys.workspaces.detail(activeWorkspaceId),
+    queryFn: () => getWorkspace(activeWorkspaceId),
+    enabled: isBoardMembersModalOpen && Boolean(activeWorkspaceId),
+  });
 
-          return boards[0]?.id ?? "";
-        });
-      } catch (error) {
-        if (isMounted) {
-          setWorkspaceErrorMessage(
-            getErrorMessage(error, "Unable to load workspace boards."),
-          );
-        }
-      }
-    }
+  const activeBoardActivityQuery = useQuery({
+    queryKey: dashboardQueryKeys.boards.activity(activeBoardId),
+    queryFn: () => getBoardActivity(activeBoardId),
+    enabled: isBoardActivityModalOpen && Boolean(activeBoardId),
+  });
 
-    void loadBoards();
-    return () => {
-      isMounted = false;
-    };
-  }, [activeWorkspaceId, setActiveBoardId, setWorkspaceErrorMessage]);
+  const activeCardDetailQuery = useQuery({
+    queryKey: cardDetailModalState
+      ? dashboardQueryKeys.cards.detail(
+          cardDetailModalState.boardId,
+          cardDetailModalState.listId,
+          cardDetailModalState.cardId,
+        )
+      : ["cards", "detail", "idle"],
+    queryFn: () =>
+      getCardDetail({
+        boardId: cardDetailModalState!.boardId,
+        listId: cardDetailModalState!.listId,
+        cardId: cardDetailModalState!.cardId,
+      }),
+    enabled: Boolean(cardDetailModalState),
+  });
 
-  useEffect(() => {
-    let isMounted = true;
+  const activeCardActivityQuery = useQuery({
+    queryKey: cardDetailModalState
+      ? dashboardQueryKeys.cards.activity(
+          cardDetailModalState.boardId,
+          cardDetailModalState.listId,
+          cardDetailModalState.cardId,
+        )
+      : ["cards", "activity", "idle"],
+    queryFn: () =>
+      getCardActivity({
+        boardId: cardDetailModalState!.boardId,
+        listId: cardDetailModalState!.listId,
+        cardId: cardDetailModalState!.cardId,
+      }),
+    enabled: Boolean(cardDetailModalState),
+  });
 
-    async function loadActiveBoardDetail() {
-      if (!activeBoardId) {
-        return;
-      }
+  const boardActivityById = useMemo<Record<string, BoardActivityItem[]>>(
+    () =>
+      activeBoard && activeBoardActivityQuery.data
+        ? { [activeBoard.id]: activeBoardActivityQuery.data }
+        : {},
+    [activeBoard, activeBoardActivityQuery.data],
+  );
 
-      try {
-        const detail = await getBoard(activeBoardId);
-        if (isMounted) {
-          setBoardDetailsById((current) => ({
-            ...current,
-            [activeBoardId]: detail,
-          }));
-        }
-      } catch (error) {
-        if (isMounted) {
-          setWorkspaceErrorMessage(
-            getErrorMessage(error, "Unable to load board details."),
-          );
-        }
-      }
-    }
+  const workspaceActivityById = useMemo<Record<string, WorkspaceActivityItem[]>>(
+    () =>
+      workspaceDetailsWorkspaceId && workspaceActivityQuery.data
+        ? { [workspaceDetailsWorkspaceId]: workspaceActivityQuery.data }
+        : {},
+    [workspaceActivityQuery.data, workspaceDetailsWorkspaceId],
+  );
 
-    void loadActiveBoardDetail();
-    return () => {
-      isMounted = false;
-    };
-  }, [activeBoardId, setWorkspaceErrorMessage]);
+  const cardDetailsById = useMemo<Record<string, BoardCardDetail>>(
+    () =>
+      cardDetailModalState && activeCardDetailQuery.data
+        ? { [cardDetailModalState.cardId]: activeCardDetailQuery.data }
+        : {},
+    [activeCardDetailQuery.data, cardDetailModalState],
+  );
 
-  useEffect(() => {
-    let isMounted = true;
+  const cardActivityById = useMemo<Record<string, BoardCardActivityItem[]>>(
+    () =>
+      cardDetailModalState && activeCardActivityQuery.data
+        ? { [cardDetailModalState.cardId]: activeCardActivityQuery.data }
+        : {},
+    [activeCardActivityQuery.data, cardDetailModalState],
+  );
 
-    async function loadActiveBoardLists() {
-      if (!activeBoardId) {
-        return;
-      }
+  const workspaceErrorMessage = useMemo(() => {
+    const firstError =
+      workspacesQuery.error ??
+      boardsQuery.error ??
+      activeBoardDetailQuery.error ??
+      activeBoardListsQuery.error ??
+      cardListQueries.find((query) => query.error)?.error;
 
-      try {
-        const lists = await listBoardLists(activeBoardId);
-        if (isMounted) {
-          setBoardListsById((current) => ({
-            ...current,
-            [activeBoardId]: lists,
-          }));
-        }
-      } catch (error) {
-        if (isMounted) {
-          setWorkspaceErrorMessage(
-            getErrorMessage(error, "Unable to load board lists."),
-          );
-        }
-      }
-    }
-
-    void loadActiveBoardLists();
-    return () => {
-      isMounted = false;
-    };
-  }, [activeBoardId, setWorkspaceErrorMessage]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadActiveBoardCards() {
-      if (!activeBoardId || activeBoardLists.length === 0) {
-        return;
-      }
-
-      try {
-        const cardsByList = await Promise.all(
-          activeBoardLists.map(async (list) => ({
-            listId: list.id,
-            cards: await listCards(activeBoardId, list.id),
-          })),
-        );
-
-        if (!isMounted) {
-          return;
-        }
-
-        setCardsByListId((current) => {
-          const next = { ...current };
-          for (const item of cardsByList) {
-            next[item.listId] = item.cards;
-          }
-          return next;
-        });
-      } catch (error) {
-        if (isMounted) {
-          setWorkspaceErrorMessage(
-            getErrorMessage(error, "Unable to load board cards."),
-          );
-        }
-      }
-    }
-
-    void loadActiveBoardCards();
-    return () => {
-      isMounted = false;
-    };
-  }, [activeBoardId, activeBoardLists, setWorkspaceErrorMessage]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadWorkspaceDetails() {
-      if (!workspaceDetailsWorkspaceId) {
-        setWorkspaceDetails(null);
-        return;
-      }
-
-      try {
-        const detail = await getWorkspace(workspaceDetailsWorkspaceId);
-        if (isMounted) {
-          setWorkspaceDetails(detail);
-        }
-      } catch {
-        if (isMounted) {
-          setWorkspaceDetails(null);
-        }
-      }
-    }
-
-    void loadWorkspaceDetails();
-    return () => {
-      isMounted = false;
-    };
-  }, [workspaceDetailsWorkspaceId, setWorkspaceDetails]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadWorkspaceActivity() {
-      if (!workspaceDetailsWorkspaceId) {
-        return;
-      }
-
-      try {
-        const activity = await getWorkspaceActivity(workspaceDetailsWorkspaceId);
-        if (isMounted) {
-          setWorkspaceActivityById((current) => ({
-            ...current,
-            [workspaceDetailsWorkspaceId]: activity,
-          }));
-        }
-      } catch {}
-    }
-
-    void loadWorkspaceActivity();
-    return () => {
-      isMounted = false;
-    };
-  }, [workspaceDetailsWorkspaceId]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadWorkspaceMembersForBoardCreation() {
-      if (!isCreateBoardModalOpen || !activeWorkspaceId) {
-        setBoardCreationWorkspaceDetail(null);
-        return;
-      }
-
-      try {
-        const detail = await getWorkspace(activeWorkspaceId);
-        if (isMounted) {
-          setBoardCreationWorkspaceDetail(detail);
-        }
-      } catch {
-        if (isMounted) {
-          setBoardCreationWorkspaceDetail(null);
-        }
-      }
-    }
-
-    void loadWorkspaceMembersForBoardCreation();
-    return () => {
-      isMounted = false;
-    };
-  }, [activeWorkspaceId, isCreateBoardModalOpen, setBoardCreationWorkspaceDetail]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadWorkspaceMembersForBoardManagement() {
-      if ((!isBoardMembersModalOpen && !isCreateBoardModalOpen) || !activeWorkspaceId) {
-        if (!isBoardMembersModalOpen) {
-          setBoardManagementWorkspaceDetail(null);
-        }
-        return;
-      }
-
-      try {
-        const detail = await getWorkspace(activeWorkspaceId);
-        if (isMounted) {
-          setBoardManagementWorkspaceDetail(detail);
-        }
-      } catch {
-        if (isMounted) {
-          setBoardManagementWorkspaceDetail(null);
-        }
-      }
-    }
-
-    void loadWorkspaceMembersForBoardManagement();
-    return () => {
-      isMounted = false;
-    };
+    return firstError
+      ? getErrorMessage(firstError, "Unable to load dashboard data.")
+      : null;
   }, [
-    activeWorkspaceId,
-    isBoardMembersModalOpen,
-    isCreateBoardModalOpen,
-    setBoardManagementWorkspaceDetail,
+    activeBoardDetailQuery.error,
+    activeBoardListsQuery.error,
+    boardsQuery.error,
+    cardListQueries,
+    workspacesQuery.error,
   ]);
 
   useEffect(() => {
@@ -480,48 +368,34 @@ export function useDashboardShell(user: AuthUser) {
   ]);
 
   async function refreshWorkspaceDetails(workspaceId: string) {
-    const refreshedWorkspace = await getWorkspace(workspaceId);
-    ui.setWorkspaceDetails(refreshedWorkspace);
+    await queryClient.invalidateQueries({
+      queryKey: dashboardQueryKeys.workspaces.detail(workspaceId),
+    });
   }
 
   async function refreshWorkspaceActivity(workspaceId: string) {
-    const activity = await getWorkspaceActivity(workspaceId);
-    setWorkspaceActivityById((current) => ({
-      ...current,
-      [workspaceId]: activity,
-    }));
+    await queryClient.invalidateQueries({
+      queryKey: dashboardQueryKeys.workspaces.activity(workspaceId),
+    });
   }
 
   async function refreshBoardDetail(boardId: string) {
-    const detail = await getBoard(boardId);
-    setBoardDetailsById((current) => ({
-      ...current,
-      [boardId]: detail,
-    }));
+    await queryClient.invalidateQueries({
+      queryKey: dashboardQueryKeys.boards.detail(boardId),
+    });
   }
 
   async function refreshBoardActivity(boardId: string) {
-    const activity = await getBoardActivity(boardId);
-    setBoardActivityById((current) => ({
-      ...current,
-      [boardId]: activity,
-    }));
-  }
-
-  async function refreshBoardLists(boardId: string) {
-    const lists = await listBoardLists(boardId);
-    setBoardListsById((current) => ({
-      ...current,
-      [boardId]: lists,
-    }));
+    await queryClient.fetchQuery({
+      queryKey: dashboardQueryKeys.boards.activity(boardId),
+      queryFn: () => getBoardActivity(boardId),
+    });
   }
 
   async function refreshListCards(boardId: string, listId: string) {
-    const cards = await listCards(boardId, listId);
-    setCardsByListId((current) => ({
-      ...current,
-      [listId]: cards,
-    }));
+    await queryClient.invalidateQueries({
+      queryKey: dashboardQueryKeys.cards.list(boardId, listId),
+    });
   }
 
   async function refreshCardDetail(input: {
@@ -529,11 +403,13 @@ export function useDashboardShell(user: AuthUser) {
     listId: string;
     cardId: string;
   }) {
-    const detail = await getCardDetail(input);
-    setCardDetailsById((current) => ({
-      ...current,
-      [input.cardId]: detail,
-    }));
+    await queryClient.invalidateQueries({
+      queryKey: dashboardQueryKeys.cards.detail(
+        input.boardId,
+        input.listId,
+        input.cardId,
+      ),
+    });
   }
 
   async function refreshCardActivity(input: {
@@ -541,21 +417,26 @@ export function useDashboardShell(user: AuthUser) {
     listId: string;
     cardId: string;
   }) {
-    const activity = await getCardActivity(input);
-    setCardActivityById((current) => ({
-      ...current,
-      [input.cardId]: activity,
-    }));
+    await queryClient.invalidateQueries({
+      queryKey: dashboardQueryKeys.cards.activity(
+        input.boardId,
+        input.listId,
+        input.cardId,
+      ),
+    });
   }
 
   async function handleCreateWorkspace(values: { name: string }) {
     const workspace = await createWorkspace(values);
 
-    setWorkspaces((current) => [...current, workspace]);
-    ui.setActiveWorkspaceId(workspace.id);
-    ui.setIsCreateWorkspaceModalOpen(false);
-    ui.setIsWorkspaceMenuOpen(false);
-    await refreshWorkspaceActivity(workspace.id);
+    queryClient.setQueryData<WorkspaceSummary[]>(
+      dashboardQueryKeys.workspaces.all,
+      (current = []) => [...current, workspace],
+    );
+
+    setActiveWorkspaceId(workspace.id);
+    setIsCreateWorkspaceModalOpen(false);
+    setIsWorkspaceMenuOpen(false);
   }
 
   async function handleCreateBoard(values: {
@@ -563,33 +444,29 @@ export function useDashboardShell(user: AuthUser) {
     description: string;
     visibility: BoardVisibility;
   }) {
-    if (!ui.activeWorkspaceId) {
+    if (!activeWorkspaceId) {
       throw new Error("Choose a workspace before creating a board.");
     }
 
     const board = await createBoard({
-      workspaceId: ui.activeWorkspaceId,
+      workspaceId: activeWorkspaceId,
       title: values.title,
       description: values.description,
       visibility: values.visibility,
     });
 
-    setBoardsByWorkspaceId((current) => ({
-      ...current,
-      [ui.activeWorkspaceId]: [...(current[ui.activeWorkspaceId] ?? []), board],
-    }));
-    setBoardDetailsById((current) => ({
-      ...current,
-      [board.id]: {
-        ...board,
-        currentUserBoardRole: "MANAGER",
-        labels: [],
-        members: [],
-      },
-    }));
-    ui.setActiveBoardId(board.id);
-    await refreshWorkspaceActivity(ui.activeWorkspaceId);
+    queryClient.setQueryData<BoardSummary[]>(
+      dashboardQueryKeys.boards.list(activeWorkspaceId),
+      (current = []) => [...current, board],
+    );
+    queryClient.setQueryData<BoardDetail>(dashboardQueryKeys.boards.detail(board.id), {
+      ...board,
+      currentUserBoardRole: "MANAGER",
+      labels: [],
+      members: [],
+    });
 
+    setActiveBoardId(board.id);
     return board;
   }
 
@@ -606,8 +483,10 @@ export function useDashboardShell(user: AuthUser) {
         }),
       ),
     );
-    await refreshBoardDetail(input.boardId);
-    await refreshBoardActivity(input.boardId);
+    await Promise.all([
+      refreshBoardDetail(input.boardId),
+      refreshBoardActivity(input.boardId),
+    ]);
   }
 
   async function handleUpdateBoard(input: {
@@ -618,67 +497,55 @@ export function useDashboardShell(user: AuthUser) {
   }) {
     const updatedBoard = await updateBoardRequest(input);
 
-    if (!ui.activeWorkspaceId) {
-      return;
+    if (activeWorkspaceId) {
+      queryClient.setQueryData<BoardSummary[]>(
+        dashboardQueryKeys.boards.list(activeWorkspaceId),
+        (current = []) =>
+          current.map((board) =>
+            board.id === updatedBoard.id ? updatedBoard : board,
+          ),
+      );
     }
 
-    setBoardsByWorkspaceId((current) => {
-      const currentBoards = current[ui.activeWorkspaceId] ?? [];
-      return {
-        ...current,
-        [ui.activeWorkspaceId]: currentBoards.map((board) =>
-          board.id === updatedBoard.id ? updatedBoard : board,
-        ),
-      };
-    });
-
-    await refreshBoardDetail(updatedBoard.id);
-    await refreshBoardActivity(updatedBoard.id);
-    await refreshWorkspaceActivity(ui.activeWorkspaceId);
+    await Promise.all([
+      refreshBoardDetail(updatedBoard.id),
+      refreshBoardActivity(updatedBoard.id),
+    ]);
   }
 
   async function handleDeleteBoard(input: { boardId: string }) {
     await deleteBoardRequest(input);
 
-    if (!ui.activeWorkspaceId) {
-      return;
+    if (activeWorkspaceId) {
+      queryClient.setQueryData<BoardSummary[]>(
+        dashboardQueryKeys.boards.list(activeWorkspaceId),
+        (current = []) => {
+          const remainingBoards = current.filter((board) => board.id !== input.boardId);
+
+          setActiveBoardId((currentActiveBoardId) =>
+            currentActiveBoardId === input.boardId
+              ? remainingBoards[0]?.id ?? ""
+              : currentActiveBoardId,
+          );
+
+          return remainingBoards;
+        },
+      );
     }
 
-    setBoardsByWorkspaceId((current) => {
-      const currentBoards = current[ui.activeWorkspaceId] ?? [];
-      const remainingBoards = currentBoards.filter((board) => board.id !== input.boardId);
-
-      ui.setActiveBoardId((currentActiveBoardId) =>
-        currentActiveBoardId === input.boardId
-          ? remainingBoards[0]?.id ?? ""
-          : currentActiveBoardId,
-      );
-
-      return {
-        ...current,
-        [ui.activeWorkspaceId]: remainingBoards,
-      };
+    queryClient.removeQueries({
+      queryKey: dashboardQueryKeys.boards.detail(input.boardId),
+    });
+    queryClient.removeQueries({
+      queryKey: dashboardQueryKeys.boards.activity(input.boardId),
+    });
+    queryClient.removeQueries({
+      queryKey: dashboardQueryKeys.boards.lists(input.boardId),
     });
 
-    setBoardDetailsById((current) => {
-      const next = { ...current };
-      delete next[input.boardId];
-      return next;
-    });
-    setBoardActivityById((current) => {
-      const next = { ...current };
-      delete next[input.boardId];
-      return next;
-    });
-    setBoardListsById((current) => {
-      const next = { ...current };
-      delete next[input.boardId];
-      return next;
-    });
-    ui.setCardDetailModalState((current) =>
+    setCardDetailModalState((current) =>
       current?.boardId === input.boardId ? null : current,
     );
-    await refreshWorkspaceActivity(ui.activeWorkspaceId);
   }
 
   async function handleAddBoardMember(input: {
@@ -687,8 +554,10 @@ export function useDashboardShell(user: AuthUser) {
     role: BoardRole;
   }) {
     await addBoardMember(input);
-    await refreshBoardDetail(input.boardId);
-    await refreshBoardActivity(input.boardId);
+    await Promise.all([
+      refreshBoardDetail(input.boardId),
+      refreshBoardActivity(input.boardId),
+    ]);
   }
 
   async function handleUpdateBoardMemberRole(input: {
@@ -697,8 +566,10 @@ export function useDashboardShell(user: AuthUser) {
     role: BoardRole;
   }) {
     await updateBoardMemberRoleRequest(input);
-    await refreshBoardDetail(input.boardId);
-    await refreshBoardActivity(input.boardId);
+    await Promise.all([
+      refreshBoardDetail(input.boardId),
+      refreshBoardActivity(input.boardId),
+    ]);
   }
 
   async function handleRemoveBoardMember(input: {
@@ -706,17 +577,19 @@ export function useDashboardShell(user: AuthUser) {
     userId: string;
   }) {
     await removeBoardMember(input);
-    await refreshBoardDetail(input.boardId);
-    await refreshBoardActivity(input.boardId);
+    await Promise.all([
+      refreshBoardDetail(input.boardId),
+      refreshBoardActivity(input.boardId),
+    ]);
   }
 
   async function handleCreateList(input: { boardId: string; title: string }) {
     const list = await createList(input);
 
-    setBoardListsById((current) => ({
-      ...current,
-      [input.boardId]: [...(current[input.boardId] ?? []), list],
-    }));
+    queryClient.setQueryData<BoardList[]>(
+      dashboardQueryKeys.boards.lists(input.boardId),
+      (current = []) => [...current, list],
+    );
     await refreshBoardActivity(input.boardId);
   }
 
@@ -727,18 +600,24 @@ export function useDashboardShell(user: AuthUser) {
   }) {
     const updatedList = await updateList(input);
 
-    setBoardListsById((current) => ({
-      ...current,
-      [input.boardId]: (current[input.boardId] ?? []).map((list) =>
-        list.id === updatedList.id ? updatedList : list,
-      ),
-    }));
+    queryClient.setQueryData<BoardList[]>(
+      dashboardQueryKeys.boards.lists(input.boardId),
+      (current = []) =>
+        current.map((list) => (list.id === updatedList.id ? updatedList : list)),
+    );
     await refreshBoardActivity(input.boardId);
   }
 
   async function handleDeleteList(input: { boardId: string; listId: string }) {
     await deleteList(input);
-    await refreshBoardLists(input.boardId);
+
+    queryClient.setQueryData<BoardList[]>(
+      dashboardQueryKeys.boards.lists(input.boardId),
+      (current = []) => current.filter((list) => list.id !== input.listId),
+    );
+    queryClient.removeQueries({
+      queryKey: dashboardQueryKeys.cards.list(input.boardId, input.listId),
+    });
     await refreshBoardActivity(input.boardId);
   }
 
@@ -749,7 +628,9 @@ export function useDashboardShell(user: AuthUser) {
     afterId?: string;
     toIndex: number;
   }) {
-    const previousLists = boardListsById[input.boardId] ?? [];
+    const previousLists =
+      queryClient.getQueryData<BoardList[]>(dashboardQueryKeys.boards.lists(input.boardId)) ??
+      [];
     const orderedLists = getSortedLists(previousLists);
     const fromIndex = orderedLists.findIndex((list) => list.id === input.listId);
 
@@ -759,19 +640,16 @@ export function useDashboardShell(user: AuthUser) {
 
     const nextLists = renumberLists(moveItem(orderedLists, fromIndex, input.toIndex));
 
-    setBoardListsById((current) => ({
-      ...current,
-      [input.boardId]: nextLists,
-    }));
+    queryClient.setQueryData(dashboardQueryKeys.boards.lists(input.boardId), nextLists);
 
     try {
       await reorderListRequest(input);
       await refreshBoardActivity(input.boardId);
     } catch (error) {
-      setBoardListsById((current) => ({
-        ...current,
-        [input.boardId]: previousLists,
-      }));
+      queryClient.setQueryData(
+        dashboardQueryKeys.boards.lists(input.boardId),
+        previousLists,
+      );
       throw error;
     }
   }
@@ -782,8 +660,10 @@ export function useDashboardShell(user: AuthUser) {
     color: string;
   }) {
     const label = await createBoardLabel(input);
-    await refreshBoardDetail(input.boardId);
-    await refreshBoardActivity(input.boardId);
+    await Promise.all([
+      refreshBoardDetail(input.boardId),
+      refreshBoardActivity(input.boardId),
+    ]);
     return label;
   }
 
@@ -809,8 +689,10 @@ export function useDashboardShell(user: AuthUser) {
       });
     }
 
-    await refreshListCards(input.boardId, input.listId);
-    await refreshBoardActivity(input.boardId);
+    await Promise.all([
+      refreshListCards(input.boardId, input.listId),
+      refreshBoardActivity(input.boardId),
+    ]);
   }
 
   async function handleMoveCard(input: {
@@ -833,10 +715,8 @@ export function useDashboardShell(user: AuthUser) {
       return;
     }
 
-    const previousCardsByListId = {
-      [input.sourceListId]: cardsByListId[input.sourceListId] ?? [],
-      [input.targetListId]: cardsByListId[input.targetListId] ?? [],
-    };
+    const previousSourceCards = cardsByListId[input.sourceListId] ?? [];
+    const previousTargetCards = cardsByListId[input.targetListId] ?? [];
 
     if (input.sourceListId === input.targetListId) {
       const fromIndex = sourceCards.findIndex((card) => card.id === input.cardId);
@@ -850,10 +730,10 @@ export function useDashboardShell(user: AuthUser) {
         input.sourceListId,
       );
 
-      setCardsByListId((current) => ({
-        ...current,
-        [input.sourceListId]: nextCards,
-      }));
+      queryClient.setQueryData(
+        dashboardQueryKeys.cards.list(input.boardId, input.sourceListId),
+        nextCards,
+      );
 
       try {
         await reorderCard({
@@ -865,10 +745,10 @@ export function useDashboardShell(user: AuthUser) {
         });
         await refreshBoardActivity(input.boardId);
       } catch (error) {
-        setCardsByListId((current) => ({
-          ...current,
-          [input.sourceListId]: previousCardsByListId[input.sourceListId],
-        }));
+        queryClient.setQueryData(
+          dashboardQueryKeys.cards.list(input.boardId, input.sourceListId),
+          previousSourceCards,
+        );
         throw error;
       }
 
@@ -883,11 +763,14 @@ export function useDashboardShell(user: AuthUser) {
       listId: input.targetListId,
     });
 
-    setCardsByListId((current) => ({
-      ...current,
-      [input.sourceListId]: renumberCards(remainingSourceCards, input.sourceListId),
-      [input.targetListId]: renumberCards(nextTargetCards, input.targetListId),
-    }));
+    queryClient.setQueryData(
+      dashboardQueryKeys.cards.list(input.boardId, input.sourceListId),
+      renumberCards(remainingSourceCards, input.sourceListId),
+    );
+    queryClient.setQueryData(
+      dashboardQueryKeys.cards.list(input.boardId, input.targetListId),
+      renumberCards(nextTargetCards, input.targetListId),
+    );
 
     try {
       await moveCardRequest({
@@ -899,6 +782,8 @@ export function useDashboardShell(user: AuthUser) {
         afterId: input.afterId,
       });
       await Promise.all([
+        refreshListCards(input.boardId, input.sourceListId),
+        refreshListCards(input.boardId, input.targetListId),
         refreshBoardActivity(input.boardId),
         refreshCardDetail({
           boardId: input.boardId,
@@ -907,18 +792,38 @@ export function useDashboardShell(user: AuthUser) {
         }).catch(() => undefined),
       ]);
     } catch (error) {
-      setCardsByListId((current) => ({
-        ...current,
-        [input.sourceListId]: previousCardsByListId[input.sourceListId],
-        [input.targetListId]: previousCardsByListId[input.targetListId],
-      }));
+      queryClient.setQueryData(
+        dashboardQueryKeys.cards.list(input.boardId, input.sourceListId),
+        previousSourceCards,
+      );
+      queryClient.setQueryData(
+        dashboardQueryKeys.cards.list(input.boardId, input.targetListId),
+        previousTargetCards,
+      );
       throw error;
     }
   }
 
   async function handleOpenCardDetail(input: CardDetailModalState) {
-    await Promise.all([refreshCardDetail(input), refreshCardActivity(input)]);
-    ui.setCardDetailModalState(input);
+    await Promise.all([
+      queryClient.fetchQuery({
+        queryKey: dashboardQueryKeys.cards.detail(
+          input.boardId,
+          input.listId,
+          input.cardId,
+        ),
+        queryFn: () => getCardDetail(input),
+      }),
+      queryClient.fetchQuery({
+        queryKey: dashboardQueryKeys.cards.activity(
+          input.boardId,
+          input.listId,
+          input.cardId,
+        ),
+        queryFn: () => getCardActivity(input),
+      }),
+    ]);
+    setCardDetailModalState(input);
   }
 
   async function handleCreateCardComment(input: {
@@ -960,17 +865,21 @@ export function useDashboardShell(user: AuthUser) {
       refreshListCards(input.boardId, input.listId),
       refreshBoardActivity(input.boardId),
     ]);
-    setCardDetailsById((current) => {
-      const next = { ...current };
-      delete next[input.cardId];
-      return next;
+    queryClient.removeQueries({
+      queryKey: dashboardQueryKeys.cards.detail(
+        input.boardId,
+        input.listId,
+        input.cardId,
+      ),
     });
-    setCardActivityById((current) => {
-      const next = { ...current };
-      delete next[input.cardId];
-      return next;
+    queryClient.removeQueries({
+      queryKey: dashboardQueryKeys.cards.activity(
+        input.boardId,
+        input.listId,
+        input.cardId,
+      ),
     });
-    ui.setCardDetailModalState((current) =>
+    setCardDetailModalState((current) =>
       current?.cardId === input.cardId ? null : current,
     );
   }
@@ -978,15 +887,21 @@ export function useDashboardShell(user: AuthUser) {
   async function handleJoinWorkspace(values: { code: string }) {
     const workspace = await joinWorkspace(values);
 
-    setWorkspaces((current) => {
-      if (current.some((item) => item.id === workspace.id)) {
-        return current.map((item) => (item.id === workspace.id ? workspace : item));
-      }
-      return [...current, workspace];
-    });
-    ui.setActiveWorkspaceId(workspace.id);
-    ui.setIsJoinWorkspaceModalOpen(false);
-    await refreshWorkspaceActivity(workspace.id);
+    queryClient.setQueryData<WorkspaceSummary[]>(
+      dashboardQueryKeys.workspaces.all,
+      (current = []) => {
+        if (current.some((item) => item.id === workspace.id)) {
+          return current.map((item) =>
+            item.id === workspace.id ? workspace : item,
+          );
+        }
+
+        return [...current, workspace];
+      },
+    );
+
+    setActiveWorkspaceId(workspace.id);
+    setIsJoinWorkspaceModalOpen(false);
   }
 
   async function handleUpdateWorkspace(
@@ -995,15 +910,18 @@ export function useDashboardShell(user: AuthUser) {
   ) {
     const updatedWorkspace = await updateWorkspace(workspaceId, updates);
 
-    setWorkspaces((current) =>
-      current.map((workspace) =>
-        workspace.id === workspaceId ? { ...workspace, ...updatedWorkspace } : workspace,
-      ),
+    queryClient.setQueryData<WorkspaceSummary[]>(
+      dashboardQueryKeys.workspaces.all,
+      (current = []) =>
+        current.map((workspace) =>
+          workspace.id === workspaceId
+            ? { ...workspace, ...updatedWorkspace }
+            : workspace,
+        ),
     );
-    ui.setWorkspaceDetails((current) =>
-      current && current.id === workspaceId
-        ? { ...current, ...updatedWorkspace }
-        : current,
+    queryClient.setQueryData<WorkspaceDetail>(
+      dashboardQueryKeys.workspaces.detail(workspaceId),
+      (current) => (current ? { ...current, ...updatedWorkspace } : current),
     );
     await refreshWorkspaceActivity(workspaceId);
   }
@@ -1011,28 +929,33 @@ export function useDashboardShell(user: AuthUser) {
   async function handleDeleteWorkspace(workspaceId: string) {
     await deleteWorkspace(workspaceId);
 
-    setWorkspaces((current) => {
-      const remaining = current.filter((workspace) => workspace.id !== workspaceId);
+    queryClient.setQueryData<WorkspaceSummary[]>(
+      dashboardQueryKeys.workspaces.all,
+      (current = []) => {
+        const remaining = current.filter((workspace) => workspace.id !== workspaceId);
 
-      ui.setActiveWorkspaceId((previous) => {
-        if (previous !== workspaceId) {
-          return previous;
-        }
-        return remaining[0]?.id ?? "";
-      });
+        setActiveWorkspaceId((previous) => {
+          if (previous !== workspaceId) {
+            return previous;
+          }
 
-      return remaining;
+          return remaining[0]?.id ?? "";
+        });
+
+        return remaining;
+      },
+    );
+
+    queryClient.removeQueries({
+      queryKey: dashboardQueryKeys.workspaces.detail(workspaceId),
+    });
+    queryClient.removeQueries({
+      queryKey: dashboardQueryKeys.workspaces.activity(workspaceId),
     });
 
-    setWorkspaceActivityById((current) => {
-      const next = { ...current };
-      delete next[workspaceId];
-      return next;
-    });
-
-    ui.setWorkspaceDetailsWorkspaceId(null);
-    ui.setWorkspaceDetails(null);
-    ui.setIsWorkspaceMenuOpen(false);
+    setWorkspaceDetailsWorkspaceId(null);
+    setWorkspaceDetails(null);
+    setIsWorkspaceMenuOpen(false);
   }
 
   async function handleInviteWorkspaceMember(input: {
@@ -1048,8 +971,10 @@ export function useDashboardShell(user: AuthUser) {
     role: "ADMIN" | "MEMBER" | "GUEST";
   }) {
     await updateWorkspaceMemberRole(input);
-    await refreshWorkspaceDetails(input.workspaceId);
-    await refreshWorkspaceActivity(input.workspaceId);
+    await Promise.all([
+      refreshWorkspaceDetails(input.workspaceId),
+      refreshWorkspaceActivity(input.workspaceId),
+    ]);
   }
 
   async function handleRemoveWorkspaceMember(input: {
@@ -1057,45 +982,52 @@ export function useDashboardShell(user: AuthUser) {
     userId: string;
   }) {
     await removeWorkspaceMember(input);
-    await refreshWorkspaceDetails(input.workspaceId);
-    await refreshWorkspaceActivity(input.workspaceId);
+    await Promise.all([
+      refreshWorkspaceDetails(input.workspaceId),
+      refreshWorkspaceActivity(input.workspaceId),
+    ]);
   }
 
   async function handleLeaveWorkspace(workspaceId: string) {
     await leaveWorkspace(workspaceId);
 
-    setWorkspaces((current) => {
-      const remaining = current.filter((workspace) => workspace.id !== workspaceId);
+    queryClient.setQueryData<WorkspaceSummary[]>(
+      dashboardQueryKeys.workspaces.all,
+      (current = []) => {
+        const remaining = current.filter((workspace) => workspace.id !== workspaceId);
 
-      ui.setActiveWorkspaceId((previous) => {
-        if (previous !== workspaceId) {
-          return previous;
-        }
-        return remaining[0]?.id ?? "";
-      });
+        setActiveWorkspaceId((previous) => {
+          if (previous !== workspaceId) {
+            return previous;
+          }
 
-      return remaining;
-    });
+          return remaining[0]?.id ?? "";
+        });
 
-    ui.setWorkspaceDetailsWorkspaceId(null);
-    ui.setWorkspaceDetails(null);
+        return remaining;
+      },
+    );
+
+    setWorkspaceDetailsWorkspaceId(null);
+    setWorkspaceDetails(null);
   }
 
   return {
-    accountMenuRef: ui.accountMenuRef,
+    accountMenuRef,
     activeBoard,
     activeBoardDetail,
     activeBoardLists,
     activeBoards,
     activeWorkspace,
     boardActivityById,
-    boardCreationWorkspaceDetail: ui.boardCreationWorkspaceDetail,
-    boardManagementWorkspaceDetail: ui.boardManagementWorkspaceDetail,
+    boardCreationWorkspaceDetail: boardCreationWorkspaceDetailQuery.data ?? null,
+    boardManagementWorkspaceDetail:
+      boardManagementWorkspaceDetailQuery.data ?? null,
     cardActivityById,
-    cardDetailModalState: ui.cardDetailModalState,
+    cardDetailModalState,
     cardDetailsById,
     cardsByListId,
-    createListRequestId: ui.createListRequestId,
+    createListRequestId,
     handleAddBoardMember,
     handleCreateBoard,
     handleCreateBoardLabel,
@@ -1122,35 +1054,35 @@ export function useDashboardShell(user: AuthUser) {
     handleUpdateCard,
     handleUpdateWorkspace,
     handleUpdateWorkspaceMemberRole,
-    isAccountMenuOpen: ui.isAccountMenuOpen,
-    isBoardActivityModalOpen: ui.isBoardActivityModalOpen,
-    isBoardMembersModalOpen: ui.isBoardMembersModalOpen,
-    isBoardSettingsModalOpen: ui.isBoardSettingsModalOpen,
-    isCreateBoardModalOpen: ui.isCreateBoardModalOpen,
-    isCreateWorkspaceModalOpen: ui.isCreateWorkspaceModalOpen,
-    isJoinWorkspaceModalOpen: ui.isJoinWorkspaceModalOpen,
-    isSidebarOpen: ui.isSidebarOpen,
-    isWorkspaceMenuOpen: ui.isWorkspaceMenuOpen,
-    setCardDetailModalState: ui.setCardDetailModalState,
-    setCreateListRequestId: ui.setCreateListRequestId,
-    setIsAccountMenuOpen: ui.setIsAccountMenuOpen,
-    setIsBoardActivityModalOpen: ui.setIsBoardActivityModalOpen,
-    setIsBoardMembersModalOpen: ui.setIsBoardMembersModalOpen,
-    setIsBoardSettingsModalOpen: ui.setIsBoardSettingsModalOpen,
-    setIsCreateBoardModalOpen: ui.setIsCreateBoardModalOpen,
-    setIsCreateWorkspaceModalOpen: ui.setIsCreateWorkspaceModalOpen,
-    setIsJoinWorkspaceModalOpen: ui.setIsJoinWorkspaceModalOpen,
-    setIsSidebarOpen: ui.setIsSidebarOpen,
-    setIsWorkspaceMenuOpen: ui.setIsWorkspaceMenuOpen,
-    setWorkspaceDetailsWorkspaceId: ui.setWorkspaceDetailsWorkspaceId,
-    userInitials,
-    workspaceDetails: ui.workspaceDetails,
+    isAccountMenuOpen,
+    isBoardActivityModalOpen,
+    isBoardMembersModalOpen,
+    isBoardSettingsModalOpen,
+    isCreateBoardModalOpen,
+    isCreateWorkspaceModalOpen,
+    isJoinWorkspaceModalOpen,
+    isSidebarOpen,
+    isWorkspaceMenuOpen,
+    setCardDetailModalState,
+    setCreateListRequestId,
+    setIsAccountMenuOpen,
+    setIsBoardActivityModalOpen,
+    setIsBoardMembersModalOpen,
+    setIsBoardSettingsModalOpen,
+    setIsCreateBoardModalOpen,
+    setIsCreateWorkspaceModalOpen,
+    setIsJoinWorkspaceModalOpen,
+    setIsSidebarOpen,
+    setIsWorkspaceMenuOpen,
+    setWorkspaceDetailsWorkspaceId,
+    userInitials: user.name.trim().slice(0, 2).toUpperCase() || "U",
+    workspaceDetails,
     workspaceActivityById,
-    workspaceErrorMessage: ui.workspaceErrorMessage,
-    workspaceMenuRef: ui.workspaceMenuRef,
+    workspaceErrorMessage,
+    workspaceMenuRef,
     workspaces,
-    setActiveBoardId: ui.setActiveBoardId,
-    setActiveWorkspaceId: ui.setActiveWorkspaceId,
+    setActiveBoardId,
+    setActiveWorkspaceId,
     refreshBoardActivity,
   };
 }

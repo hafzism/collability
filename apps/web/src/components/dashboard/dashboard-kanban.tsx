@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   closestCenter,
@@ -8,7 +8,6 @@ import {
   DragOverlay,
   MouseSensor,
   TouchSensor,
-  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -18,25 +17,10 @@ import {
 import {
   SortableContext,
   horizontalListSortingStrategy,
-  useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { motion } from "framer-motion";
-
-import {
-  CalendarDays,
-  Check,
-  Info,
-  MessageSquareText,
-  MoreVertical,
-  Pipette,
-  Plus,
-  UserPlus,
-  X,
-} from "lucide-react";
-
-import { cn } from "@/lib/utils";
+import { Check, MoreVertical, Plus, X } from "lucide-react";
 
 import type {
   BoardCard,
@@ -44,7 +28,32 @@ import type {
   BoardList,
   BoardMember,
 } from "./board-types";
-import { getAvatarFallback } from "./workspace-utils";
+import { CardDraftComposer } from "./kanban/card-draft-composer";
+import { BoardCardBody, SortableCardItem } from "./kanban/kanban-card";
+import {
+  type ActiveDrag,
+  type CardsByListId,
+  type DraftCard,
+  TOUCH_DRAG_DELAY,
+  areCardsByListEqual,
+  areListOrdersEqual,
+  findCardListId,
+  getCardItemId,
+  getCardNeighbors,
+  getListItemId,
+  isInteractiveTarget,
+  moveArrayItem,
+  normalizeCardsByListId,
+  normalizeListTitle,
+  renumberLists,
+  renumberCards,
+  sortListsByPosition,
+} from "./kanban/kanban-utils";
+import {
+  ListDropZone,
+  ListOverlay,
+  SortableListColumn,
+} from "./kanban/list-overlay";
 
 type DashboardKanbanProps = {
   activeBoardId: string;
@@ -105,105 +114,6 @@ type DashboardKanbanProps = {
   }) => Promise<void>;
 };
 
-type DraftCard = {
-  position: "top" | "bottom";
-};
-
-type CardsByListId = Record<string, BoardCard[]>;
-
-type ActiveDrag =
-  | {
-      type: "card";
-      cardId: string;
-      sourceListId: string;
-    }
-  | {
-      type: "list";
-      listId: string;
-    };
-
-const LIST_ITEM_PREFIX = "list:";
-const LIST_DROP_PREFIX = "list-drop:";
-const CARD_ITEM_PREFIX = "card:";
-const TOUCH_DRAG_DELAY = 300;
-
-function sortListsByPosition(items: BoardList[]) {
-  return [...items].sort((left, right) => Number(left.position) - Number(right.position));
-}
-
-function sortCardsByPosition(items: BoardCard[]) {
-  return [...items].sort((left, right) => Number(left.position) - Number(right.position));
-}
-
-function normalizeCardsByListId(
-  lists: BoardList[],
-  cardsByListId: CardsByListId,
-): CardsByListId {
-  return Object.fromEntries(
-    lists.map((list) => [list.id, sortCardsByPosition(cardsByListId[list.id] ?? [])]),
-  );
-}
-
-function renumberCards(cards: BoardCard[], listId: string) {
-  return cards.map((card, index) => ({
-    ...card,
-    listId,
-    position: `${(index + 1) * 1000}`,
-  }));
-}
-
-function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number) {
-  const next = [...items];
-  const [item] = next.splice(fromIndex, 1);
-  next.splice(toIndex, 0, item);
-  return next;
-}
-
-function areCardOrdersEqual(left: BoardCard[], right: BoardCard[]) {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return left.every((card, index) => card.id === right[index]?.id);
-}
-
-function areListOrdersEqual(left: BoardList[], right: BoardList[]) {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return left.every((list, index) => list.id === right[index]?.id);
-}
-
-function areCardsByListEqual(
-  left: CardsByListId,
-  right: CardsByListId,
-  listIds: string[],
-) {
-  return listIds.every((listId) =>
-    areCardOrdersEqual(left[listId] ?? [], right[listId] ?? []),
-  );
-}
-
-function getCardItemId(cardId: string) {
-  return `${CARD_ITEM_PREFIX}${cardId}`;
-}
-
-function getListItemId(listId: string) {
-  return `${LIST_ITEM_PREFIX}${listId}`;
-}
-
-function getListDropId(listId: string) {
-  return `${LIST_DROP_PREFIX}${listId}`;
-}
-
-function isInteractiveTarget(target: EventTarget | null) {
-  return (
-    target instanceof Element &&
-    Boolean(target.closest("[data-no-dnd='true']"))
-  );
-}
-
 class BoardMouseSensor extends MouseSensor {
   static activators = [
     {
@@ -224,832 +134,271 @@ class BoardTouchSensor extends TouchSensor {
   ];
 }
 
-function getCardNeighbors(cards: BoardCard[], targetIndex: number) {
-  return {
-    beforeId: targetIndex > 0 ? cards[targetIndex - 1]?.id : undefined,
-    afterId:
-      targetIndex < cards.length - 1 ? cards[targetIndex + 1]?.id : undefined,
-  };
-}
-
-function findCardListId(cardsByListId: CardsByListId, cardId: string) {
-  for (const [listId, cards] of Object.entries(cardsByListId)) {
-    if (cards.some((card) => card.id === cardId)) {
-      return listId;
-    }
-  }
-
-  return null;
-}
-
-function normalizeListTitle(value: string) {
-  return value.trim().replace(/\s+/g, " ");
-}
-
-function normalizeCardText(value: string) {
-  return value.trim().replace(/\s+/g, " ");
-}
-
-function formatDueDate(value: string | null) {
-  if (!value) {
-    return "Due date";
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(value));
-}
-
-function getTodayDateString() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = `${now.getMonth() + 1}`.padStart(2, "0");
-  const day = `${now.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function ResizableUnderlineField({
-  value,
-  onChange,
-  placeholder,
-  className,
-  minRows = 1,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  className?: string;
-  minRows?: number;
-}) {
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-  useEffect(() => {
-    if (!textareaRef.current) {
-      return;
-    }
-
-    textareaRef.current.style.height = "0px";
-    textareaRef.current.style.height = `${Math.max(
-      textareaRef.current.scrollHeight,
-      minRows * 24,
-    )}px`;
-  }, [minRows, value]);
-
-  return (
-    <textarea
-      ref={textareaRef}
-      value={value}
-      rows={minRows}
-      onChange={(event) => onChange(event.target.value)}
-      placeholder={placeholder}
-      className={cn(
-        "w-full resize-none overflow-hidden border-b border-white/12 bg-transparent px-0 py-0 text-left outline-none transition placeholder:text-[#6f6f6a] focus:border-white/25",
-        className,
-      )}
-    />
-  );
-}
-
-function CardDraftComposer({
-  boardId,
-  listId,
+function ListColumn({
+  activeBoardId,
   boardLabels,
   boardMembers,
+  canManageCards,
+  canManageLists,
+  cardDraft,
+  cards,
+  column,
+  confirmDeleteListId,
+  editingListId,
+  editingTitle,
+  isDraggingCard,
+  isPending,
+  menuOpen,
+  onCancelDraft,
+  onCancelRename,
+  onChangeEditingTitle,
+  onConfirmDelete,
   onCreateBoardLabel,
-  onSubmit,
-  onCancel,
-  position,
+  onCreateCard,
+  onDeleteList,
+  onOpenCardComments,
+  onOpenCardDetails,
+  onOpenMenu,
+  onRenameStart,
+  onRenameSubmit,
+  onShowDeleteConfirm,
+  onShowNewCardDraft,
+  pendingListId,
+  renameInputRef,
 }: {
-  boardId: string;
-  listId: string;
+  activeBoardId: string;
   boardLabels: BoardLabel[];
   boardMembers: BoardMember[];
-  onCreateBoardLabel: (input: {
-    boardId: string;
-    name: string;
-    color: string;
-  }) => Promise<BoardLabel | void>;
-  onSubmit: (input: {
-    boardId: string;
-    listId: string;
-    title: string;
-    description?: string;
-    dueDate?: string;
-    labelIds?: string[];
-    assigneeIds?: string[];
-    position: "top" | "bottom";
-  }) => Promise<void>;
-  onCancel: () => void;
-  position: "top" | "bottom";
+  canManageCards: boolean;
+  canManageLists: boolean;
+  cardDraft: DraftCard | null | undefined;
+  cards: BoardCard[];
+  column: BoardList;
+  confirmDeleteListId: string | null;
+  editingListId: string | null;
+  editingTitle: string;
+  isDraggingCard: boolean;
+  isPending: boolean;
+  menuOpen: boolean;
+  onCancelDraft: (listId: string) => void;
+  onCancelRename: (title: string) => void;
+  onChangeEditingTitle: (value: string) => void;
+  onConfirmDelete: (listId: string) => Promise<void>;
+  onCreateBoardLabel: DashboardKanbanProps["onCreateBoardLabel"];
+  onCreateCard: DashboardKanbanProps["onCreateCard"];
+  onDeleteList: (listId: string) => void;
+  onOpenCardComments: DashboardKanbanProps["onOpenCardComments"];
+  onOpenCardDetails: DashboardKanbanProps["onOpenCardDetails"];
+  onOpenMenu: () => void;
+  onRenameStart: (listId: string, title: string) => void;
+  onRenameSubmit: (listId: string) => Promise<void>;
+  onShowDeleteConfirm: (listId: string) => void;
+  onShowNewCardDraft: (listId: string, position: "top" | "bottom") => void;
+  pendingListId: string | null;
+  renameInputRef: React.RefObject<HTMLInputElement | null>;
 }) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [labelIds, setLabelIds] = useState<string[]>([]);
-  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
-  const [openPopover, setOpenPopover] = useState<"labels" | "assignees" | "date" | null>(
-    null,
-  );
-  const [creatingLabelName, setCreatingLabelName] = useState("");
-  const [creatingLabelColor, setCreatingLabelColor] = useState<string>("#ffffff");
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isCreatingLabel, setIsCreatingLabel] = useState(false);
-  const [isShaking, setIsShaking] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const labelTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const assigneeTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const dateTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const dateInputRef = useRef<HTMLInputElement | null>(null);
-  const popoverRef = useRef<HTMLDivElement | null>(null);
-
-  const selectedLabels = useMemo(
-    () => boardLabels.filter((label) => labelIds.includes(label.id)),
-    [boardLabels, labelIds],
-  );
-  const selectedMembers = useMemo(
-    () => boardMembers.filter((member) => assigneeIds.includes(member.userId)),
-    [assigneeIds, boardMembers],
-  );
-
-  useEffect(() => {
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-      const clickedInsidePopover =
-        popoverRef.current && popoverRef.current.contains(target);
-      const clickedInsideCard =
-        containerRef.current && containerRef.current.contains(target);
-
-      if (openPopover && !clickedInsidePopover) {
-        setOpenPopover(null);
-      }
-
-      if (!clickedInsideCard && !isSaving) {
-        setIsShaking(true);
-        window.setTimeout(() => setIsShaking(false), 280);
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [isSaving, openPopover]);
-
-  useEffect(() => {
-    if (openPopover === "date" && dateInputRef.current) {
-      dateInputRef.current.focus();
-      if ("showPicker" in dateInputRef.current) {
-        try {
-          dateInputRef.current.showPicker();
-        } catch {}
-      }
-    }
-  }, [openPopover]);
-
-  async function handleCreateLabel() {
-    const normalizedName = normalizeCardText(creatingLabelName);
-    if (!normalizedName) {
-      return;
-    }
-
-    setIsCreatingLabel(true);
-    setError(null);
-
-    try {
-      const createdLabel = await onCreateBoardLabel({
-        boardId,
-        name: normalizedName,
-        color: creatingLabelColor,
-      });
-
-      if (createdLabel) {
-        setLabelIds((current) => [...current, createdLabel.id]);
-      }
-
-      setCreatingLabelName("");
-      setOpenPopover("labels");
-    } catch (labelError) {
-      setError(
-        labelError instanceof Error
-          ? labelError.message
-          : "Unable to create label right now.",
-      );
-    } finally {
-      setIsCreatingLabel(false);
-    }
-  }
-
-  async function handleSubmit() {
-    const normalizedTitle = normalizeCardText(title);
-    const normalizedDescription = normalizeCardText(description);
-
-    if (!normalizedTitle) {
-      return;
-    }
-
-    setIsSaving(true);
-    setError(null);
-
-    try {
-      await onSubmit({
-        boardId,
-        listId,
-        title: normalizedTitle,
-        description: normalizedDescription || undefined,
-        dueDate: dueDate || undefined,
-        labelIds,
-        assigneeIds,
-        position,
-      });
-      onCancel();
-    } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Unable to create card right now.",
-      );
-      setIsSaving(false);
-    }
-  }
-
   return (
-    <div
-      data-no-dnd="true"
-      ref={containerRef}
-      className={cn(
-        "relative rounded-[20px] border border-white/7 bg-[linear-gradient(180deg,#1a1a1b_0%,#141415_100%)] p-4 shadow-[0_14px_34px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.03)] ring-1 ring-white/[0.02]",
-        isShaking ? "[animation:card-draft-shake_0.28s_ease-in-out]" : "",
-      )}
+    <SortableListColumn
+      column={column}
+      canManageLists={canManageLists}
+      isDraggingCard={isDraggingCard}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        {selectedLabels.map((label) => (
-          <span
-            key={label.id}
-            className="inline-flex rounded-full border px-1.75 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em]"
-            style={{
-              borderColor: `${label.color}55`,
-              backgroundColor: `${label.color}1a`,
-              color: label.color,
-            }}
-          >
-            {label.name}
-          </span>
-        ))}
-
-        <button
-          ref={labelTriggerRef}
-          type="button"
-          onClick={() => setOpenPopover("labels")}
-          className={cn(
-            "rounded-full border border-white/8 px-2 py-0.75 text-[9px] font-medium uppercase tracking-[0.14em] text-[#bcbcb8] transition hover:border-white/14 hover:text-white",
-            selectedLabels.length > 0 ? "min-w-6 px-1.75" : "",
-          )}
-        >
-          {selectedLabels.length > 0 ? "+" : "+ Label"}
-        </button>
-      </div>
-
-      {openPopover === "labels" ? (
-        <div
-          ref={popoverRef}
-          className="fixed z-30 w-[252px] rounded-[16px] border border-white/8 bg-[#121213] p-3 shadow-[0_24px_50px_rgba(0,0,0,0.5)]"
-          style={{
-            top: (labelTriggerRef.current?.getBoundingClientRect().bottom ?? 0) + 8,
-            left: labelTriggerRef.current?.getBoundingClientRect().left ?? 0,
-          }}
-        >
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#8f8f89]">
-            Labels
-          </p>
-          <div className="mt-3 max-h-[180px] space-y-1 overflow-y-auto pr-1 [scrollbar-color:rgba(255,255,255,0.28)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/25 [&::-webkit-scrollbar-track]:bg-transparent">
-            {boardLabels.map((label) => {
-              const isSelected = labelIds.includes(label.id);
-
-              return (
-                <button
-                  key={label.id}
-                  type="button"
-                  onClick={() =>
-                    setLabelIds((current) =>
-                      isSelected
-                        ? current.filter((id) => id !== label.id)
-                        : [...current, label.id],
-                    )
-                  }
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-[12px] px-3 py-2 text-left text-sm transition",
-                    isSelected
-                      ? "ui-pressed-active text-white"
-                      : "text-[#c9c9c4] hover:bg-white/6 hover:text-white",
-                  )}
-                >
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: label.color }}
-                  />
-                  <span className="flex-1 truncate">{label.name}</span>
-                  {isSelected ? <Check className="h-3.5 w-3.5" /> : null}
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-3 border-t border-white/8 pt-3">
-            <div className="flex items-center gap-3">
+      <section className="ui-pressed-active flex h-full max-h-full min-h-[220px] flex-col overflow-visible rounded-[20px] border">
+        <header className="sticky top-0 z-[1] flex shrink-0 items-center justify-between bg-transparent px-4 py-3.5">
+          {editingListId === column.id ? (
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <input
-                value={creatingLabelName}
-                onChange={(event) => setCreatingLabelName(event.target.value)}
-                placeholder="New label"
-                className="h-9 min-w-0 flex-1 border-b border-white/12 bg-transparent px-0 text-sm text-white outline-none placeholder:text-[#6c6c67]"
+                data-no-dnd="true"
+                ref={renameInputRef}
+                value={editingTitle}
+                onChange={(event) => onChangeEditingTitle(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void onRenameSubmit(column.id);
+                  }
+
+                  if (event.key === "Escape") {
+                    onCancelRename(column.title);
+                  }
+                }}
+                className="h-9 min-w-0 flex-1 border-b border-white/12 bg-transparent px-0 text-[14px] font-medium text-[#f2f2ef] outline-none transition focus:border-white/25"
               />
-              <label
-                className="relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/10 transition hover:border-white/20"
-                style={{ backgroundColor: creatingLabelColor }}
+              <button
+                data-no-dnd="true"
+                type="button"
+                onClick={() => void onRenameSubmit(column.id)}
+                disabled={isPending}
+                className="rounded-[10px] p-2 text-[#d4d4cf] transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={`Save ${column.title}`}
               >
-                <Pipette className="h-3.5 w-3.5 text-black/75" />
-                <input
-                  type="color"
-                  value={creatingLabelColor}
-                  onChange={(event) => setCreatingLabelColor(event.target.value)}
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                  aria-label="Choose label color"
-                />
-              </label>
+                <Check className="h-4 w-4" />
+              </button>
+              <button
+                data-no-dnd="true"
+                type="button"
+                onClick={() => onCancelRename(column.title)}
+                className="rounded-[10px] p-2 text-[#8a8a84] transition hover:bg-white/5 hover:text-white"
+                aria-label={`Cancel renaming ${column.title}`}
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            {normalizeCardText(creatingLabelName) ? (
-              <button
-                type="button"
-                onClick={() => void handleCreateLabel()}
-                disabled={isCreatingLabel}
-                className="ui-pressed-button mt-3 rounded-[10px] border px-3 py-1.5 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isCreatingLabel ? "Creating..." : "Create label"}
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+          ) : (
+            <>
+              <h3 className="truncate pr-3 text-[16px] font-semibold tracking-[-0.015em] text-[#f2f2ef]">
+                {column.title}
+              </h3>
 
-      <div className="mt-3">
-        <ResizableUnderlineField
-          value={title}
-          onChange={setTitle}
-          placeholder="Card title"
-          className="text-[15px] font-medium leading-6 text-[#f2f2ef]"
-        />
-      </div>
+              <div className="flex items-center gap-1">
+                {canManageCards ? (
+                  <button
+                    data-no-dnd="true"
+                    type="button"
+                    onClick={() => onShowNewCardDraft(column.id, "top")}
+                    aria-label={`Create card at top of ${column.title}`}
+                    className="rounded-md p-1.5 text-[#727272] transition hover:bg-white/5 hover:text-white"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                ) : null}
 
-      <div className="mt-3">
-        <ResizableUnderlineField
-          value={description}
-          onChange={setDescription}
-          placeholder="Description"
-          className="text-[13px] leading-6 text-[#bdbdb8]"
-          minRows={1}
-        />
-      </div>
+                {canManageLists ? (
+                  <button
+                    data-no-dnd="true"
+                    type="button"
+                    onClick={onOpenMenu}
+                    aria-label={`More options for ${column.title}`}
+                    className="rounded-md p-1.5 text-[#727272] transition hover:bg-white/5 hover:text-white"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+            </>
+          )}
+        </header>
 
-      <div className="mt-4 flex items-end justify-between gap-4">
-        <div className="relative flex min-w-0 flex-1 items-center gap-2">
-          <div className="flex -space-x-1.5">
-            {selectedMembers.map((member) => (
-              <button
-                key={member.id}
-                type="button"
-                onClick={() =>
-                  setAssigneeIds((current) =>
-                    current.filter((userId) => userId !== member.userId),
-                  )
-                }
-                title={`Remove ${member.user.name}`}
-                className="group relative flex h-6 w-6 items-center justify-center rounded-full border border-[#121213] bg-[#d66c12] text-[9px] font-semibold text-white"
-              >
-                <span className="group-hover:opacity-0">
-                  {getAvatarFallback(member.user.name)}
-                </span>
-                <X className="absolute h-3 w-3 opacity-0 transition group-hover:opacity-100" />
-              </button>
-            ))}
-          </div>
-
-          <button
-            ref={assigneeTriggerRef}
-            type="button"
-            onClick={() => setOpenPopover("assignees")}
-            className={cn(
-              "flex items-center justify-center rounded-full border border-white/8 text-[#c2c2bd] transition hover:border-white/14 hover:text-white",
-              selectedMembers.length > 0 ? "h-6 w-6" : "h-7 gap-1.5 px-2.5 text-[11px]",
-            )}
-          >
-            {selectedMembers.length > 0 ? (
-              <Plus className="h-3.5 w-3.5" />
+        {menuOpen ? (
+          <div className="absolute right-3 top-13 z-10 min-w-[174px] rounded-[14px] border border-white/8 bg-[#151515] p-1.5 shadow-[0_24px_50px_rgba(0,0,0,0.48)]">
+            {confirmDeleteListId === column.id ? (
+              <div className="space-y-3 rounded-[12px] px-3 py-3">
+                <div>
+                  <p className="text-[13px] font-medium text-[#f2d1cb]">
+                    Delete list?
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-[#bb8f87]">
+                    Are you sure you want to delete this list and all of its cards?
+                  </p>
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    data-no-dnd="true"
+                    type="button"
+                    onClick={() => onDeleteList(column.id)}
+                    className="ui-pressed-button rounded-[10px] border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    data-no-dnd="true"
+                    type="button"
+                    onClick={() => void onConfirmDelete(column.id)}
+                    disabled={pendingListId === column.id}
+                    className="ui-pressed-danger rounded-[10px] border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {pendingListId === column.id ? "Deleting" : "Delete"}
+                  </button>
+                </div>
+              </div>
             ) : (
               <>
-                <UserPlus className="h-3.5 w-3.5" />
-                <span>Assignees</span>
+                <button
+                  data-no-dnd="true"
+                  type="button"
+                  onClick={() => onRenameStart(column.id, column.title)}
+                  className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] text-[#d9d9d6] transition hover:bg-white/6 hover:text-white"
+                >
+                  <span>Rename list</span>
+                </button>
+                <button
+                  data-no-dnd="true"
+                  type="button"
+                  onClick={() => onShowDeleteConfirm(column.id)}
+                  className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] text-[#f0b3a8] transition hover:bg-[#2b1512] hover:text-[#ffd5cd]"
+                >
+                  <span>Delete list</span>
+                </button>
               </>
             )}
-          </button>
+          </div>
+        ) : null}
 
-          {openPopover === "assignees" ? (
-            <div
-              ref={popoverRef}
-              className="fixed z-30 w-[190px] rounded-[16px] border border-white/8 bg-[#121213] p-2 shadow-[0_24px_50px_rgba(0,0,0,0.5)]"
-              style={{
-                top: (assigneeTriggerRef.current?.getBoundingClientRect().bottom ?? 0) + 8,
-                left: assigneeTriggerRef.current?.getBoundingClientRect().left ?? 0,
-              }}
-            >
-              <div className="max-h-[128px] overflow-y-auto [scrollbar-color:rgba(255,255,255,0.28)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/25 [&::-webkit-scrollbar-track]:bg-transparent">
-                {boardMembers.map((member) => {
-                  const isSelected = assigneeIds.includes(member.userId);
-                  return (
-                    <button
-                      key={member.id}
-                      type="button"
-                      onClick={() =>
-                        setAssigneeIds((current) =>
-                          isSelected
-                            ? current.filter((userId) => userId !== member.userId)
-                            : [...current, member.userId],
-                        )
-                      }
-                      className={cn(
-                        "flex w-full items-center gap-2 rounded-[10px] px-2 py-1.5 text-left transition",
-                        isSelected
-                          ? "bg-white/6 text-white"
-                          : "text-[#c9c9c4] hover:bg-white/4 hover:text-white",
-                      )}
-                    >
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#d66c12] text-[9px] font-semibold text-white">
-                        {getAvatarFallback(member.user.name)}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[12px]">
-                        {member.user.name}
-                      </span>
-                      {isSelected ? <Check className="h-3.5 w-3.5" /> : null}
-                    </button>
-                  );
-                })}
+        <div className="scrollbar-hidden min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 pb-4 pt-1">
+          <ListDropZone listId={column.id} isCardDragActive={isDraggingCard}>
+            <div className="flex min-h-full flex-col">
+              <div className="space-y-3">
+                {cardDraft?.position === "top" ? (
+                  <CardDraftComposer
+                    boardId={activeBoardId}
+                    listId={column.id}
+                    boardLabels={boardLabels}
+                    boardMembers={boardMembers}
+                    onCreateBoardLabel={onCreateBoardLabel}
+                    onSubmit={onCreateCard}
+                    onCancel={() => onCancelDraft(column.id)}
+                    position="top"
+                  />
+                ) : null}
+
+                <SortableContext
+                  items={cards.map((card) => getCardItemId(card.id))}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {cards.map((card) => (
+                    <SortableCardItem
+                      key={card.id}
+                      boardId={activeBoardId}
+                      card={card}
+                      canManageCards={canManageCards}
+                      onOpenComments={onOpenCardComments}
+                      onOpenDetails={onOpenCardDetails}
+                    />
+                  ))}
+                </SortableContext>
+
+                {cardDraft?.position === "bottom" ? (
+                  <CardDraftComposer
+                    boardId={activeBoardId}
+                    listId={column.id}
+                    boardLabels={boardLabels}
+                    boardMembers={boardMembers}
+                    onCreateBoardLabel={onCreateBoardLabel}
+                    onSubmit={onCreateCard}
+                    onCancel={() => onCancelDraft(column.id)}
+                    position="bottom"
+                  />
+                ) : null}
               </div>
+
+              <div aria-hidden="true" className="min-h-16 flex-1" />
+
+              {canManageCards ? (
+                <button
+                  data-no-dnd="true"
+                  type="button"
+                  onClick={() => onShowNewCardDraft(column.id, "bottom")}
+                  className="mt-2 flex w-full items-center justify-center gap-2 px-3 py-2 text-[12px] font-medium text-[#747470] transition hover:text-[#d7d7d3]"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>New card</span>
+                </button>
+              ) : null}
             </div>
-          ) : null}
+          </ListDropZone>
         </div>
-
-        <div className="relative shrink-0">
-          <button
-            ref={dateTriggerRef}
-            type="button"
-            onClick={() => setOpenPopover("date")}
-            className="inline-flex items-center gap-1 rounded-full border border-white/8 px-2 py-1 text-[10px] text-[#8a8a87] transition hover:border-white/14 hover:text-white"
-          >
-            <CalendarDays className="h-2.5 w-2.5" />
-            {formatDueDate(dueDate || null)}
-          </button>
-
-          {openPopover === "date" ? (
-            <div
-              ref={popoverRef}
-              className="fixed z-30 w-[186px] rounded-[16px] border border-white/8 bg-[#121213] p-2.5 shadow-[0_24px_50px_rgba(0,0,0,0.5)]"
-              style={{
-                top: (dateTriggerRef.current?.getBoundingClientRect().bottom ?? 0) + 8,
-                left:
-                  (dateTriggerRef.current?.getBoundingClientRect().right ?? 186) - 186,
-              }}
-            >
-              <input
-                ref={dateInputRef}
-                type="date"
-                value={dueDate}
-                min={getTodayDateString()}
-                onChange={(event) => {
-                  setDueDate(event.target.value);
-                  setOpenPopover(null);
-                }}
-                className="h-10 w-full rounded-[12px] border border-white/10 bg-[#161617] px-3 text-sm text-white outline-none"
-              />
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      {error ? <p className="mt-3 text-xs text-[#f07f6a]">{error}</p> : null}
-
-      <div className="mt-4 flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-[10px] p-2 text-[#8a8a84] transition hover:bg-white/5 hover:text-white"
-          aria-label="Cancel card draft"
-        >
-          <X className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleSubmit()}
-          disabled={!normalizeCardText(title) || isSaving}
-          className="rounded-[10px] p-2 text-[#d4d4cf] transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="Save card"
-        >
-          <Check className="h-4 w-4" />
-        </button>
-      </div>
-
-      <style jsx>{`
-        @keyframes card-draft-shake {
-          0%,
-          100% {
-            transform: translateX(0);
-          }
-          25% {
-            transform: translateX(-4px);
-          }
-          75% {
-            transform: translateX(4px);
-          }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-function BoardCardBody({
-  boardId,
-  card,
-  onOpenComments,
-  onOpenDetails,
-  className,
-}: {
-  boardId: string;
-  card: BoardCard;
-  onOpenComments: (input: {
-    boardId: string;
-    listId: string;
-    cardId: string;
-  }) => void;
-  onOpenDetails: (input: {
-    boardId: string;
-    listId: string;
-    cardId: string;
-  }) => void;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-[20px] border border-white/7 bg-[linear-gradient(180deg,#1a1a1b_0%,#141415_100%)] p-4 text-left shadow-[0_14px_34px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.03)] ring-1 ring-white/[0.02]",
-        className,
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {card.labels.map(({ id, label }) => (
-            <span
-              key={id}
-              className="inline-flex rounded-full border px-1.75 py-0.5 text-[8px] font-medium uppercase tracking-[0.12em]"
-              style={{
-                borderColor: `${label.color}55`,
-                backgroundColor: `${label.color}1a`,
-                color: label.color,
-              }}
-            >
-              {label.name}
-            </span>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-1">
-          <button
-            data-no-dnd="true"
-            type="button"
-            onClick={() =>
-              onOpenDetails({
-                boardId,
-                listId: card.listId,
-                cardId: card.id,
-              })
-            }
-            className="rounded-[9px] p-1.5 text-[#7f7f7a] transition hover:bg-white/6 hover:text-white"
-            aria-label={`Open details for ${card.title}`}
-          >
-            <Info className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      <h4 className="mt-3 text-[14px] font-medium leading-5 text-[#f2f2f0]">
-        {card.title}
-      </h4>
-
-      {card.description ? (
-        <p className="mt-2 line-clamp-3 text-[12px] leading-5 text-[#a6a6a1]">
-          {card.description}
-        </p>
-      ) : null}
-
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <div className="flex -space-x-1.5">
-          {card.assignees.map((assignee) => (
-            <span
-              key={assignee.id}
-              title={assignee.user.name}
-              className="flex h-5.5 w-5.5 items-center justify-center rounded-full border border-[#121213] bg-[#d66c12] text-[8px] font-semibold text-white"
-            >
-              {getAvatarFallback(assignee.user.name)}
-            </span>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2 text-[10px] text-[#8a8a87]">
-          {card._count.comments > 0 ? (
-            <button
-              data-no-dnd="true"
-              type="button"
-              onClick={() =>
-                onOpenComments({
-                  boardId,
-                  listId: card.listId,
-                  cardId: card.id,
-                })
-              }
-              className="inline-flex items-center gap-1 rounded-full border border-white/6 bg-black/20 px-1.75 py-0.5 transition hover:border-white/10 hover:text-white"
-              aria-label={`Open comments for ${card.title}`}
-            >
-              <MessageSquareText className="h-2.5 w-2.5" />
-              {card._count.comments}
-            </button>
-          ) : null}
-          {card.dueDate ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-white/6 bg-black/20 px-1.75 py-0.5">
-              <CalendarDays className="h-2.5 w-2.5" />
-              {formatDueDate(card.dueDate)}
-            </span>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SortableCardItem({
-  boardId,
-  card,
-  canManageCards,
-  onOpenComments,
-  onOpenDetails,
-}: {
-  boardId: string;
-  card: BoardCard;
-  canManageCards: boolean;
-  onOpenComments: (input: {
-    boardId: string;
-    listId: string;
-    cardId: string;
-  }) => void;
-  onOpenDetails: (input: {
-    boardId: string;
-    listId: string;
-    cardId: string;
-  }) => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({
-      id: getCardItemId(card.id),
-      disabled: !canManageCards,
-      data: {
-        type: "card",
-        cardId: card.id,
-        listId: card.listId,
-      },
-    });
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-      }}
-      className={cn(
-        "transition-[opacity,transform] duration-200",
-        isDragging ? "opacity-35" : "",
-      )}
-      {...attributes}
-      {...listeners}
-    >
-      <BoardCardBody
-        boardId={boardId}
-        card={card}
-        onOpenComments={onOpenComments}
-        onOpenDetails={onOpenDetails}
-        className={cn(
-          "transition-[transform,box-shadow] duration-200",
-          canManageCards ? "cursor-grab active:cursor-grabbing" : "",
-        )}
-      />
-    </div>
-  );
-}
-
-function SortableListColumn({
-  children,
-  column,
-  canManageLists,
-  isDraggingCard,
-}: {
-  children: ReactNode;
-  column: BoardList;
-  canManageLists: boolean;
-  isDraggingCard: boolean;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({
-      id: getListItemId(column.id),
-      disabled: !canManageLists,
-      data: {
-        type: "list",
-        listId: column.id,
-      },
-    });
-
-  return (
-    <div
-      className="relative h-full min-h-0 w-[296px] shrink-0 self-stretch"
-    >
-      <div
-        ref={setNodeRef}
-        className={cn(
-          "h-full self-start transition-opacity duration-200",
-          canManageLists && !isDraggingCard ? "cursor-grab active:cursor-grabbing" : "",
-          isDragging ? "opacity-40" : "",
-        )}
-        style={{
-          transform: CSS.Transform.toString(transform),
-          transition,
-        }}
-        {...attributes}
-        {...listeners}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function ListDropZone({
-  listId,
-  children,
-  isCardDragActive,
-}: {
-  listId: string;
-  children: ReactNode;
-  isCardDragActive: boolean;
-}) {
-  const { isOver, setNodeRef } = useDroppable({
-    id: getListDropId(listId),
-    data: {
-      type: "list-drop",
-      listId,
-    },
-  });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "flex min-h-full flex-col rounded-[18px] transition-colors duration-200",
-        isCardDragActive && isOver ? "bg-white/[0.03]" : "",
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-function ListOverlay({
-  title,
-  cardCount,
-}: {
-  title: string;
-  cardCount: number;
-}) {
-  return (
-    <motion.div
-      initial={{ scale: 1 }}
-      animate={{ scale: 1.02, rotate: -1 }}
-      className="ui-pressed-active flex w-[296px] min-h-[220px] flex-col rounded-[20px] border opacity-95 shadow-[0_30px_90px_rgba(0,0,0,0.45)]"
-    >
-      <header className="flex shrink-0 items-center justify-between px-4 py-3.5">
-        <h3 className="truncate pr-3 text-[16px] font-semibold tracking-[-0.015em] text-[#f2f2ef]">
-          {title}
-        </h3>
-        <span className="rounded-full border border-white/8 px-2 py-1 text-[10px] text-[#8f8f89]">
-          {cardCount} cards
-        </span>
-      </header>
-      <div className="flex flex-1 items-end px-4 pb-4 pt-1">
-        <p className="text-[12px] text-[#8f8f89]">Drop here</p>
-      </div>
-    </motion.div>
+      </section>
+    </SortableListColumn>
   );
 }
 
@@ -1077,7 +426,7 @@ export function DashboardKanban({
   const [editingTitle, setEditingTitle] = useState("");
   const [creatingList, setCreatingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState("");
-  const [confirmArchiveListId, setConfirmArchiveListId] = useState<string | null>(
+  const [confirmDeleteListId, setConfirmDeleteListId] = useState<string | null>(
     null,
   );
   const [pendingListId, setPendingListId] = useState<string | null>(null);
@@ -1158,7 +507,7 @@ export function DashboardKanban({
 
       if (menuRef.current && !menuRef.current.contains(target)) {
         setOpenColumnMenuId(null);
-        setConfirmArchiveListId(null);
+        setConfirmDeleteListId(null);
       }
 
       if (
@@ -1205,7 +554,7 @@ export function DashboardKanban({
     setEditingListId(null);
     setEditingTitle("");
     setOpenColumnMenuId(null);
-    setConfirmArchiveListId(null);
+    setConfirmDeleteListId(null);
     setListError(null);
     setDraftsByListId({});
     setOrderedLists(sortListsByPosition(lists));
@@ -1213,15 +562,40 @@ export function DashboardKanban({
     setActiveDrag(null);
     dragSnapshotRef.current = null;
     lastCardOverRef.current = null;
-  }, [activeBoardId]);
+  }, [activeBoardId, cardsByListId, lists]);
 
   function openCreateListDraft() {
     setCreatingList(true);
     setNewListTitle("");
     setEditingListId(null);
     setOpenColumnMenuId(null);
-    setConfirmArchiveListId(null);
+    setConfirmDeleteListId(null);
     setListError(null);
+  }
+
+  function clearCardDraft(listId: string) {
+    setDraftsByListId((current) => ({
+      ...current,
+      [listId]: null,
+    }));
+  }
+
+  function openCardDraft(listId: string, position: "top" | "bottom") {
+    setDraftsByListId((current) => ({
+      ...current,
+      [listId]: { position },
+    }));
+  }
+
+  function startRename(listId: string, title: string) {
+    setEditingListId(listId);
+    setEditingTitle(title);
+    setOpenColumnMenuId(null);
+  }
+
+  function cancelRename(title: string) {
+    setEditingListId(null);
+    setEditingTitle(title);
   }
 
   async function handleCreateListSubmit() {
@@ -1287,7 +661,7 @@ export function DashboardKanban({
     }
   }
 
-  async function handleArchiveListSubmit(listId: string) {
+  async function handleDeleteListSubmit(listId: string) {
     setPendingListId(listId);
     setListError(null);
 
@@ -1297,7 +671,7 @@ export function DashboardKanban({
         listId,
       });
       setOpenColumnMenuId(null);
-      setConfirmArchiveListId(null);
+      setConfirmDeleteListId(null);
     } catch (error) {
       setListError(
         error instanceof Error ? error.message : "Unable to delete list right now.",
@@ -1356,7 +730,7 @@ export function DashboardKanban({
       return;
     }
 
-    const overData = event.over?.data.current;
+    const overData = event.over.data.current;
     if (!overData) {
       return;
     }
@@ -1373,11 +747,7 @@ export function DashboardKanban({
     }
 
     const currentListId = findCardListId(orderedCardsByListId, activeDrag.cardId);
-    if (!currentListId) {
-      return;
-    }
-
-    if (currentListId === targetListId) {
+    if (!currentListId || currentListId === targetListId) {
       return;
     }
 
@@ -1413,8 +783,10 @@ export function DashboardKanban({
     const nextTargetCards = renumberCards(targetCards, targetListId);
 
     if (
-      areCardOrdersEqual(nextSourceCards, orderedCardsByListId[currentListId] ?? []) &&
-      areCardOrdersEqual(nextTargetCards, orderedCardsByListId[targetListId] ?? [])
+      nextSourceCards.length === (orderedCardsByListId[currentListId] ?? []).length &&
+      nextTargetCards.length === (orderedCardsByListId[targetListId] ?? []).length &&
+      nextSourceCards.every((card, index) => card.id === orderedCardsByListId[currentListId]?.[index]?.id) &&
+      nextTargetCards.every((card, index) => card.id === orderedCardsByListId[targetListId]?.[index]?.id)
     ) {
       return;
     }
@@ -1465,12 +837,7 @@ export function DashboardKanban({
         return;
       }
 
-      const nextLists = moveArrayItem(orderedLists, fromIndex, toIndex).map(
-        (list, index) => ({
-          ...list,
-          position: `${(index + 1) * 1000}`,
-        }),
-      );
+      const nextLists = renumberLists(moveArrayItem(orderedLists, fromIndex, toIndex));
       const beforeId = toIndex > 0 ? nextLists[toIndex - 1]?.id : undefined;
       const afterId =
         toIndex < nextLists.length - 1 ? nextLists[toIndex + 1]?.id : undefined;
@@ -1622,253 +989,52 @@ export function DashboardKanban({
           strategy={horizontalListSortingStrategy}
         >
           <div className="flex h-full min-h-0 min-w-max items-stretch gap-4 pr-4">
-            {orderedLists.map((column) => {
-              const cards = orderedCardsByListId[column.id] ?? [];
-              const draft = draftsByListId[column.id];
-
-              return (
-                <SortableListColumn
-                  key={column.id}
-                  column={column}
+            {orderedLists.map((column) => (
+              <div
+                key={column.id}
+                ref={openColumnMenuId === column.id ? menuRef : undefined}
+              >
+                <ListColumn
+                  activeBoardId={activeBoardId}
+                  boardLabels={boardLabels}
+                  boardMembers={boardMembers}
+                  canManageCards={canManageCards}
                   canManageLists={canManageLists}
+                  cardDraft={draftsByListId[column.id]}
+                  cards={orderedCardsByListId[column.id] ?? []}
+                  column={column}
+                  confirmDeleteListId={confirmDeleteListId}
+                  editingListId={editingListId}
+                  editingTitle={editingTitle}
                   isDraggingCard={activeDrag?.type === "card"}
-                >
-                  <section className="ui-pressed-active flex h-full max-h-full min-h-[220px] flex-col overflow-visible rounded-[20px] border">
-                    <header className="sticky top-0 z-[1] flex shrink-0 items-center justify-between bg-transparent px-4 py-3.5">
-                      {editingListId === column.id ? (
-                        <div className="flex min-w-0 flex-1 items-center gap-2">
-                          <input
-                            data-no-dnd="true"
-                            ref={renameInputRef}
-                            value={editingTitle}
-                            onChange={(event) => setEditingTitle(event.target.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                void handleRenameSubmit(column.id);
-                              }
-
-                              if (event.key === "Escape") {
-                                setEditingListId(null);
-                                setEditingTitle(column.title);
-                              }
-                            }}
-                            className="h-9 min-w-0 flex-1 border-b border-white/12 bg-transparent px-0 text-[14px] font-medium text-[#f2f2ef] outline-none transition focus:border-white/25"
-                          />
-                          <button
-                            data-no-dnd="true"
-                            type="button"
-                            onClick={() => void handleRenameSubmit(column.id)}
-                            disabled={pendingListId === column.id}
-                            className="rounded-[10px] p-2 text-[#d4d4cf] transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                            aria-label={`Save ${column.title}`}
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
-                          <button
-                            data-no-dnd="true"
-                            type="button"
-                            onClick={() => {
-                              setEditingListId(null);
-                              setEditingTitle(column.title);
-                            }}
-                            className="rounded-[10px] p-2 text-[#8a8a84] transition hover:bg-white/5 hover:text-white"
-                            aria-label={`Cancel renaming ${column.title}`}
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <h3 className="truncate pr-3 text-[16px] font-semibold tracking-[-0.015em] text-[#f2f2ef]">
-                            {column.title}
-                          </h3>
-
-                          <div className="flex items-center gap-1">
-                            {canManageCards ? (
-                              <button
-                                data-no-dnd="true"
-                                type="button"
-                                onClick={() =>
-                                  setDraftsByListId((current) => ({
-                                    ...current,
-                                    [column.id]: { position: "top" },
-                                  }))
-                                }
-                                aria-label={`Create card at top of ${column.title}`}
-                                className="rounded-md p-1.5 text-[#727272] transition hover:bg-white/5 hover:text-white"
-                              >
-                                <Plus className="h-4 w-4" />
-                              </button>
-                            ) : null}
-
-                            {canManageLists ? (
-                              <button
-                                data-no-dnd="true"
-                                type="button"
-                                onClick={() =>
-                                  setOpenColumnMenuId((currentValue) =>
-                                    currentValue === column.id ? null : column.id,
-                                  )
-                                }
-                                aria-label={`More options for ${column.title}`}
-                                className="rounded-md p-1.5 text-[#727272] transition hover:bg-white/5 hover:text-white"
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </button>
-                            ) : null}
-                          </div>
-                        </>
-                      )}
-                    </header>
-
-                    {openColumnMenuId === column.id ? (
-                      <div
-                        ref={menuRef}
-                        className="absolute right-3 top-13 z-10 min-w-[174px] rounded-[14px] border border-white/8 bg-[#151515] p-1.5 shadow-[0_24px_50px_rgba(0,0,0,0.48)]"
-                      >
-                        {confirmArchiveListId === column.id ? (
-                          <div className="space-y-3 rounded-[12px] px-3 py-3">
-                            <div>
-                              <p className="text-[13px] font-medium text-[#f2d1cb]">
-                                Delete list?
-                              </p>
-                              <p className="mt-1 text-[11px] leading-5 text-[#bb8f87]">
-                                Are you sure you want to delete this list and all of its cards?
-                              </p>
-                            </div>
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                data-no-dnd="true"
-                                type="button"
-                                onClick={() => setConfirmArchiveListId(null)}
-                                className="ui-pressed-button rounded-[10px] border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] transition"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                data-no-dnd="true"
-                                type="button"
-                                onClick={() => void handleArchiveListSubmit(column.id)}
-                                disabled={pendingListId === column.id}
-                                className="ui-pressed-danger rounded-[10px] border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {pendingListId === column.id ? "Deleting" : "Delete"}
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <button
-                              data-no-dnd="true"
-                              type="button"
-                              onClick={() => {
-                                setEditingListId(column.id);
-                                setEditingTitle(column.title);
-                                setOpenColumnMenuId(null);
-                              }}
-                              className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] text-[#d9d9d6] transition hover:bg-white/6 hover:text-white"
-                            >
-                              <span>Rename list</span>
-                            </button>
-                            <button
-                              data-no-dnd="true"
-                              type="button"
-                              onClick={() => setConfirmArchiveListId(column.id)}
-                              className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] text-[#f0b3a8] transition hover:bg-[#2b1512] hover:text-[#ffd5cd]"
-                            >
-                              <span>Delete list</span>
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    ) : null}
-
-                    <div className="scrollbar-hidden min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 pb-4 pt-1">
-                      <ListDropZone
-                        listId={column.id}
-                        isCardDragActive={activeDrag?.type === "card"}
-                      >
-                        <div className="flex min-h-full flex-col">
-                          <div className="space-y-3">
-                            {draft?.position === "top" ? (
-                              <CardDraftComposer
-                                boardId={activeBoardId}
-                                listId={column.id}
-                                boardLabels={boardLabels}
-                                boardMembers={boardMembers}
-                                onCreateBoardLabel={onCreateBoardLabel}
-                                onSubmit={onCreateCard}
-                                onCancel={() =>
-                                  setDraftsByListId((current) => ({
-                                    ...current,
-                                    [column.id]: null,
-                                  }))
-                                }
-                                position="top"
-                              />
-                            ) : null}
-
-                            <SortableContext
-                              items={cards.map((card) => getCardItemId(card.id))}
-                              strategy={verticalListSortingStrategy}
-                            >
-                              {cards.map((card) => (
-                                <SortableCardItem
-                                  key={card.id}
-                                  boardId={activeBoardId}
-                                  card={card}
-                                  canManageCards={canManageCards}
-                                  onOpenComments={onOpenCardComments}
-                                  onOpenDetails={onOpenCardDetails}
-                                />
-                              ))}
-                            </SortableContext>
-
-                            {draft?.position === "bottom" ? (
-                              <CardDraftComposer
-                                boardId={activeBoardId}
-                                listId={column.id}
-                                boardLabels={boardLabels}
-                                boardMembers={boardMembers}
-                                onCreateBoardLabel={onCreateBoardLabel}
-                                onSubmit={onCreateCard}
-                                onCancel={() =>
-                                  setDraftsByListId((current) => ({
-                                    ...current,
-                                    [column.id]: null,
-                                  }))
-                                }
-                                position="bottom"
-                              />
-                            ) : null}
-                          </div>
-
-                          <div aria-hidden="true" className="min-h-16 flex-1" />
-
-                          {canManageCards ? (
-                            <button
-                              data-no-dnd="true"
-                              type="button"
-                              onClick={() =>
-                                setDraftsByListId((current) => ({
-                                  ...current,
-                                  [column.id]: { position: "bottom" },
-                                }))
-                              }
-                              className="mt-2 flex w-full items-center justify-center gap-2 px-3 py-2 text-[12px] font-medium text-[#747470] transition hover:text-[#d7d7d3]"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                              <span>New card</span>
-                            </button>
-                          ) : null}
-                        </div>
-                      </ListDropZone>
-                    </div>
-                  </section>
-                </SortableListColumn>
-              );
-            })}
+                  isPending={pendingListId === column.id}
+                  menuOpen={openColumnMenuId === column.id}
+                  onCancelDraft={clearCardDraft}
+                  onCancelRename={cancelRename}
+                  onChangeEditingTitle={setEditingTitle}
+                  onConfirmDelete={handleDeleteListSubmit}
+                  onCreateBoardLabel={onCreateBoardLabel}
+                  onCreateCard={onCreateCard}
+                  onDeleteList={() => {
+                    setConfirmDeleteListId(null);
+                    setOpenColumnMenuId(null);
+                  }}
+                  onOpenCardComments={onOpenCardComments}
+                  onOpenCardDetails={onOpenCardDetails}
+                  onOpenMenu={() =>
+                    setOpenColumnMenuId((currentValue) =>
+                      currentValue === column.id ? null : column.id,
+                    )
+                  }
+                  onRenameStart={startRename}
+                  onRenameSubmit={handleRenameSubmit}
+                  onShowDeleteConfirm={setConfirmDeleteListId}
+                  onShowNewCardDraft={openCardDraft}
+                  pendingListId={pendingListId}
+                  renameInputRef={renameInputRef}
+                />
+              </div>
+            ))}
 
             {canManageLists && !creatingList ? (
               <div className="relative h-full min-h-0 w-[296px] shrink-0 self-start">

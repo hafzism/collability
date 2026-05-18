@@ -632,14 +632,13 @@ export class CardsService {
     });
   }
 
-  async getListCards(boardId: string, listId: string, includeArchived = false, limit = 50, offset = 0): Promise<any[]> {
+  async getListCards(boardId: string, listId: string, limit = 50, offset = 0): Promise<any[]> {
     return this.prisma.card.findMany({
       where: {
         listId,
         list: {
           boardId,
         },
-        archived: includeArchived ? undefined : false,
       },
       orderBy: { position: 'asc' },
       take: limit,
@@ -654,7 +653,7 @@ export class CardsService {
     cardId: string,
     actorUserId: string,
     data: Partial<
-      Pick<Card, 'title' | 'description' | 'dueDate' | 'archived'>
+      Pick<Card, 'title' | 'description' | 'dueDate'>
     > & { labelIds?: string[]; assigneeIds?: string[] },
   ): Promise<any> {
     await this.validateListBoardAccess(listId, boardId);
@@ -842,16 +841,15 @@ export class CardsService {
     if (!card) throw new NotFoundException('Card not found');
 
     return this.prisma.$transaction(async (tx) => {
-      const archivedCard = await tx.card.update({
+      const deletedCard = await tx.card.delete({
         where: { id: cardId },
-        data: { archived: true },
       });
 
       await this.boardsService.logBoardActivity(tx, {
         workspaceId: card.list.board.workspaceId,
         userId: actorUserId,
         boardId,
-        action: 'card.archived',
+        action: 'card.deleted',
         metadata: {
           cardId,
           cardTitle: card.title,
@@ -863,13 +861,13 @@ export class CardsService {
         workspaceId: card.list.board.workspaceId,
         userId: actorUserId,
         cardId,
-        action: 'card.archived',
+        action: 'card.deleted',
         metadata: {
           cardTitle: card.title,
         },
       });
 
-      return archivedCard;
+      return deletedCard;
     });
   }
 

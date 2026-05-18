@@ -12,12 +12,12 @@ type BoardSettingsModalProps = {
   board: BoardDetail;
   canManageBoard: boolean;
   onClose: () => void;
+  onDeleteBoard: (input: { boardId: string }) => Promise<void>;
   onUpdateBoard: (input: {
     boardId: string;
     title?: string;
     description?: string;
     visibility?: BoardVisibility;
-    archived?: boolean;
   }) => Promise<void>;
 };
 
@@ -39,14 +39,15 @@ export function BoardSettingsModal({
   board,
   canManageBoard,
   onClose,
+  onDeleteBoard,
   onUpdateBoard,
 }: BoardSettingsModalProps) {
   const [title, setTitle] = useState(board.title);
   const [description, setDescription] = useState(board.description ?? "");
   const [visibility, setVisibility] = useState<BoardVisibility>(board.visibility);
   const [isSaving, setIsSaving] = useState(false);
-  const [isArchiving, setIsArchiving] = useState(false);
-  const [isConfirmingArchive, setIsConfirmingArchive] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const titleError = useMemo(() => validateBoardTitle(title), [title]);
@@ -87,34 +88,33 @@ export function BoardSettingsModal({
     }
   }
 
-  async function handleArchive() {
+  async function handleDelete() {
     if (!canManageBoard) {
       return;
     }
 
-    setIsArchiving(true);
+    setIsDeleting(true);
     setActionError(null);
 
     try {
-      await onUpdateBoard({
+      await onDeleteBoard({
         boardId: board.id,
-        archived: true,
       });
       onClose();
     } catch (error) {
       setActionError(
         error instanceof Error
           ? error.message
-          : "Unable to archive the board right now.",
+          : "Unable to delete the board right now.",
       );
-      setIsArchiving(false);
+      setIsDeleting(false);
     }
   }
 
   return (
     <DashboardModal className="max-w-2xl" onClose={onClose}>
       <div className="relative">
-        <div className={cn(isConfirmingArchive ? "pointer-events-none opacity-30 blur-[1px]" : "")}>
+        <div className={cn(isConfirmingDelete ? "pointer-events-none opacity-30 blur-[1px]" : "")}>
           <div className="flex items-start justify-between gap-4 pb-5">
             <div>
               <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-[#f5f5f3]">
@@ -122,8 +122,8 @@ export function BoardSettingsModal({
               </h2>
               <p className="mt-2 max-w-xl text-sm text-[#9a9a95]">
                 {canManageBoard
-                  ? "Update the board title, description, visibility, and archive state."
-                  : "View the current board title, description, visibility, and archive state."}
+                  ? "Update the board title, description, and visibility, or delete it permanently."
+                  : "View the current board title, description, and visibility."}
               </p>
             </div>
 
@@ -211,11 +211,11 @@ export function BoardSettingsModal({
                   type="button"
                   onClick={() => {
                     setActionError(null);
-                    setIsConfirmingArchive(true);
+                    setIsConfirmingDelete(true);
                   }}
                   className="ui-pressed-danger rounded-[12px] border px-4 py-2 text-sm font-medium transition"
                 >
-                  Archive board
+                  Delete board
                 </button>
               ) : (
                 <span className="text-xs text-[#8f8f89]">
@@ -252,29 +252,29 @@ export function BoardSettingsModal({
           </form>
         </div>
 
-        {isConfirmingArchive ? (
+        {isConfirmingDelete ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center">
             <div className="w-full max-w-[340px] rounded-[14px] border border-white/10 bg-[#111112] p-4 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
-              <p className="text-sm font-medium text-white">Archive board?</p>
+              <p className="text-sm font-medium text-white">Delete board?</p>
               <p className="mt-2 text-xs leading-5 text-[#a0a09a]">
-                Are you sure you want to archive this board? Its lists, cards, members,
-                and activity will be kept in an archived state.
+                Are you sure you want to delete this board? Its lists, cards, and
+                members will be removed permanently.
               </p>
               <div className="mt-4 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsConfirmingArchive(false)}
+                  onClick={() => setIsConfirmingDelete(false)}
                   className="rounded-[10px] border border-white/10 bg-transparent px-3 py-1.5 text-sm text-white transition hover:bg-white/5"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={() => void handleArchive()}
-                  disabled={isArchiving}
+                  onClick={() => void handleDelete()}
+                  disabled={isDeleting}
                   className="rounded-[10px] border border-[#8f2e2e] bg-[#b93838] px-3 py-1.5 text-sm font-medium text-white transition hover:bg-[#c54545] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isArchiving ? "Archiving..." : "Archive"}
+                  {isDeleting ? "Deleting..." : "Delete"}
                 </button>
               </div>
             </div>

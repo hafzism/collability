@@ -147,11 +147,10 @@ export class ListsService {
     });
   }
 
-  async getBoardLists(boardId: string, includeArchived = false, limit = 50, offset = 0): Promise<List[]> {
+  async getBoardLists(boardId: string, limit = 50, offset = 0): Promise<List[]> {
     return this.prisma.list.findMany({
       where: {
         boardId,
-        archived: includeArchived ? undefined : false,
       },
       orderBy: { position: 'asc' },
       take: limit,
@@ -163,7 +162,7 @@ export class ListsService {
     boardId: string,
     listId: string,
     actorUserId: string,
-    data: { title?: string; archived?: boolean },
+    data: { title?: string },
   ): Promise<List> {
     const list = await this.prisma.list.findFirst({
       where: { id: listId, boardId },
@@ -199,25 +198,43 @@ export class ListsService {
           },
         });
       }
-
-      if (data.archived === true && list.archived === false) {
-        await this.boardsService.logBoardActivity(tx, {
-          workspaceId: list.board.workspaceId,
-          userId: actorUserId,
-          boardId,
-          action: 'list.archived',
-          metadata: {
-            listId,
-            listTitle: updatedList.title,
-          },
-        });
-      }
-
       return updatedList;
     });
   }
 
   async deleteList(boardId: string, listId: string, actorUserId: string): Promise<List> {
-    return this.updateList(boardId, listId, actorUserId, { archived: true });
+    const list = await this.prisma.list.findFirst({
+      where: { id: listId, boardId },
+      include: {
+        board: {
+          select: {
+            workspaceId: true,
+          },
+        },
+      },
+    });
+
+    if (!list) {
+      throw new NotFoundException('List not found');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const deletedList = await tx.list.delete({
+        where: { id: listId },
+      });
+
+      await this.boardsService.logBoardActivity(tx, {
+        workspaceId: list.board.workspaceId,
+        userId: actorUserId,
+        boardId,
+        action: 'list.deleted',
+        metadata: {
+          listId,
+          listTitle: list.title,
+        },
+      });
+
+      return deletedList;
+    });
   }
 }

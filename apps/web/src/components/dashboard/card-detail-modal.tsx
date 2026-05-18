@@ -17,11 +17,11 @@ type CardDetailModalProps = {
   activityItems: BoardCardActivityItem[];
   boardLabels: BoardLabel[];
   boardMembers: BoardMember[];
-  canArchiveCard: boolean;
+  canDeleteCard: boolean;
   canEditCard: boolean;
   card: BoardCardDetail;
   initialTab?: "details" | "comments";
-  onArchiveCard: (input: { cardId: string }) => Promise<void>;
+  onDeleteCard: (input: { cardId: string }) => Promise<void>;
   onClose: () => void;
   onCreateComment: (input: { cardId: string; content: string }) => Promise<void>;
   onUpdateCard: (input: {
@@ -79,11 +79,11 @@ export function CardDetailModal({
   activityItems,
   boardLabels,
   boardMembers,
-  canArchiveCard,
+  canDeleteCard,
   canEditCard,
   card,
   initialTab = "details",
-  onArchiveCard,
+  onDeleteCard,
   onClose,
   onCreateComment,
   onUpdateCard,
@@ -177,16 +177,16 @@ export function CardDetailModal({
     }
   }
 
-  async function handleArchive() {
+  async function handleDelete() {
     setIsArchiveSubmitting(true);
     setActionError(null);
 
     try {
-      await onArchiveCard({ cardId: card.id });
+      await onDeleteCard({ cardId: card.id });
       onClose();
     } catch (error) {
       setActionError(
-        error instanceof Error ? error.message : "Unable to archive card right now.",
+        error instanceof Error ? error.message : "Unable to delete card right now.",
       );
       setIsArchiveSubmitting(false);
     }
@@ -232,7 +232,7 @@ export function CardDetailModal({
                 </button>
               ))}
             </div>
-            {canArchiveCard ? (
+            {canDeleteCard ? (
               <button
                 type="button"
                 onClick={() => {
@@ -241,7 +241,7 @@ export function CardDetailModal({
                 }}
                 className="rounded-[10px] px-2.5 py-1.5 text-[11px] font-medium text-[#f07f6a] transition hover:bg-[#321714]"
               >
-                Archive card
+                Delete card
               </button>
             ) : null}
           </div>
@@ -543,10 +543,10 @@ export function CardDetailModal({
         {isConfirmingArchive ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center">
             <div className="w-full max-w-[320px] rounded-[14px] border border-white/10 bg-[#111112] p-4 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
-              <p className="text-sm font-medium text-white">Archive card?</p>
+              <p className="text-sm font-medium text-white">Delete card?</p>
               <p className="mt-2 text-xs leading-5 text-[#a0a09a]">
-                Are you sure you want to archive this card? It will be removed from the
-                active list and kept in an archived state.
+                Are you sure you want to delete this card? This action cannot be
+                undone.
               </p>
               <div className="mt-4 flex items-center justify-end gap-2">
                 <button
@@ -558,11 +558,11 @@ export function CardDetailModal({
                 </button>
                 <button
                   type="button"
-                  onClick={() => void handleArchive()}
+                  onClick={() => void handleDelete()}
                   disabled={isArchiveSubmitting}
                   className="rounded-[10px] border border-[#8f2e2e] bg-[#b93838] px-3 py-1.5 text-sm font-medium text-white transition hover:bg-[#c54545] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isArchiveSubmitting ? "Archiving..." : "Archive"}
+                  {isArchiveSubmitting ? "Deleting..." : "Delete"}
                 </button>
               </div>
             </div>

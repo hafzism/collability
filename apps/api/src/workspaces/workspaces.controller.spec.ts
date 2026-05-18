@@ -128,12 +128,20 @@ describe('WorkspacesController', () => {
     workspacesService.updateWorkspace.mockResolvedValue({ id: 'workspace-1' });
 
     await expect(
-      controller.updateWorkspace('workspace-1', { name: 'Updated' }),
+      controller.updateWorkspace(
+        { user: { id: 'user-1' } } as any,
+        'workspace-1',
+        { name: 'Updated' },
+      ),
     ).resolves.toEqual({ id: 'workspace-1' });
 
-    expect(workspacesService.updateWorkspace).toHaveBeenCalledWith('workspace-1', {
-      name: 'Updated',
-    });
+    expect(workspacesService.updateWorkspace).toHaveBeenCalledWith(
+      'workspace-1',
+      'user-1',
+      {
+        name: 'Updated',
+      },
+    );
   });
 
   it('deletes a workspace by id', async () => {

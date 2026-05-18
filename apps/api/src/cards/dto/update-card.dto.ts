@@ -1,6 +1,5 @@
 import {
   IsArray,
-  IsBoolean,
   IsDateString,
   IsOptional,
   IsString,
@@ -18,11 +17,6 @@ export class UpdateCardDto {
   @IsDateString()
   @IsOptional()
   dueDate?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  archived?: boolean;
-
   @IsArray()
   @IsString({ each: true })
   @IsOptional()

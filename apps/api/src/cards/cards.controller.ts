@@ -23,7 +23,6 @@ import { BoardGuard } from '../common/guards/board.guard';
 import { RequireBoardRole } from '../common/decorators/require-board-role.decorator';
 import { BoardRole } from '../common/enums/board-role.enum';
 import type { AuthenticatedRequest } from '../common/interfaces/authenticated-request.interface';
-import { WorkspaceRole } from '../common/enums/workspace-role.enum';
 
 @Controller('boards/:boardId/lists/:listId/cards')
 @UseGuards(JwtAuthGuard, BoardGuard)
@@ -43,24 +42,14 @@ export class CardsController {
 
   @Get()
   async getCards(
-    @Req() req: AuthenticatedRequest,
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,
-    @Query('includeArchived') includeArchived?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
-    const include = includeArchived === 'true';
     const take = limit ? parseInt(limit) : 50;
     const skip = offset ? parseInt(offset) : 0;
-    if (
-      include &&
-      req.workspaceRole !== WorkspaceRole.OWNER &&
-      req.workspaceRole !== WorkspaceRole.ADMIN
-    ) {
-      return this.cardsService.getListCards(boardId, listId, false, take, skip);
-    }
-    return this.cardsService.getListCards(boardId, listId, include, take, skip);
+    return this.cardsService.getListCards(boardId, listId, take, skip);
   }
 
   @Get(':cardId')

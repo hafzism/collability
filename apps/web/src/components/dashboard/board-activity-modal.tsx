@@ -74,8 +74,7 @@ export function BoardActivityModal({
                 No board activity yet
               </p>
               <p className="mt-2 text-sm text-[#8f8f89]">
-                Board updates, member changes, and archive events will appear
-                here.
+                Board updates, member changes, and delete events will appear here.
               </p>
             </div>
           </div>

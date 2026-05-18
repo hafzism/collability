@@ -171,34 +171,16 @@ export class WorkspacesController {
   async getBoards(
     @Req() req: AuthenticatedRequest,
     @Param('workspaceId') workspaceId: string,
-    @Query('includeArchived') includeArchived?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
-    const include = includeArchived === 'true';
     const take = limit ? parseInt(limit, 10) : 50;
     const skip = offset ? parseInt(offset, 10) : 0;
-
-    if (
-      include &&
-      req.workspaceRole !== WorkspaceRole.OWNER &&
-      req.workspaceRole !== WorkspaceRole.ADMIN
-    ) {
-      return this.boardsService.findWorkspaceBoards(
-        workspaceId,
-        req.user.id,
-        req.workspaceRole as WorkspaceRole,
-        false,
-        take,
-        skip,
-      );
-    }
 
     return this.boardsService.findWorkspaceBoards(
       workspaceId,
       req.user.id,
       req.workspaceRole as WorkspaceRole,
-      include,
       take,
       skip,
     );

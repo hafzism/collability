@@ -9,7 +9,6 @@ export type BoardSummary = {
   description: string | null;
   visibility: BoardVisibility;
   createdBy: string;
-  archived: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -53,7 +52,6 @@ export type BoardList = {
   boardId: string;
   title: string;
   position: string;
-  archived: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -86,7 +84,6 @@ export type BoardCard = {
   position: string;
   dueDate: string | null;
   createdBy: string;
-  archived: boolean;
   createdAt: string;
   updatedAt: string;
   assignees: BoardCardAssignee[];

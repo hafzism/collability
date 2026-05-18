@@ -27,7 +27,7 @@ Planned previews:
 - Activity history and audit logs
 
 ### Kanban Board
-- Create, edit, move, and archive cards
+- Create, edit, move, and delete cards
 - Drag-and-drop ordering
 - User assignments, due dates, and checklists
 

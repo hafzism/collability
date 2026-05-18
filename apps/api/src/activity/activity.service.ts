@@ -57,6 +57,7 @@ export class ActivityService {
             'workspace.member_role_changed',
             'board.created',
             'board.archived',
+            'board.deleted',
             'board.visibility_changed',
           ],
         },
@@ -96,6 +97,8 @@ export class ActivityService {
         return `${actorName} added board ${this.quote(metadata.boardTitle)}`;
       case 'board.archived':
         return `${actorName} archived board ${this.quote(metadata.boardTitle)}`;
+      case 'board.deleted':
+        return `${actorName} deleted board ${this.quote(metadata.boardTitle)}`;
       case 'board.visibility_changed':
         return `${actorName} changed ${this.quote(metadata.boardTitle)} visibility from ${this.lower(metadata.oldVisibility)} to ${this.lower(metadata.newVisibility)}`;
       default:
@@ -118,6 +121,8 @@ export class ActivityService {
         return `${actorName} changed board visibility from ${this.lower(metadata.oldVisibility)} to ${this.lower(metadata.newVisibility)}`;
       case 'board.archived':
         return `${actorName} archived the board`;
+      case 'board.deleted':
+        return `${actorName} deleted the board`;
       case 'board.member_added':
         return `${actorName} added ${this.readName(metadata.targetUserName)} to the board as ${this.lower(metadata.role)}`;
       case 'board.member_role_changed':
@@ -132,10 +137,14 @@ export class ActivityService {
         return `${actorName} renamed list to ${this.quote(metadata.newTitle)}`;
       case 'list.archived':
         return `${actorName} archived list ${this.quote(metadata.listTitle)}`;
+      case 'list.deleted':
+        return `${actorName} deleted list ${this.quote(metadata.listTitle)}`;
       case 'card.created':
         return `${actorName} added card ${this.quote(metadata.cardTitle)}`;
       case 'card.archived':
         return `${actorName} archived card ${this.quote(metadata.cardTitle)}`;
+      case 'card.deleted':
+        return `${actorName} deleted card ${this.quote(metadata.cardTitle)}`;
       case 'card.moved':
         return `${actorName} moved ${this.quote(metadata.cardTitle)} from ${this.quote(metadata.fromListTitle)} to ${this.quote(metadata.toListTitle)}`;
       case 'card.assignee_added':
@@ -176,6 +185,8 @@ export class ActivityService {
         return `${actorName} moved the card from ${this.quote(metadata.fromListTitle)} to ${this.quote(metadata.toListTitle)}`;
       case 'card.archived':
         return `${actorName} archived the card`;
+      case 'card.deleted':
+        return `${actorName} deleted the card`;
       default:
         return `${actorName} updated the card`;
     }

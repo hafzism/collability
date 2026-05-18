@@ -88,7 +88,6 @@ export function updateCard(input: {
   title?: string;
   description?: string;
   dueDate?: string | null;
-  archived?: boolean;
   labelIds?: string[];
   assigneeIds?: string[];
 }) {
@@ -100,7 +99,6 @@ export function updateCard(input: {
         title: input.title,
         description: input.description,
         dueDate: input.dueDate,
-        archived: input.archived,
         labelIds: input.labelIds,
         assigneeIds: input.assigneeIds,
       },

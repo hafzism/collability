@@ -7,6 +7,7 @@ import {
   addBoardMember,
   createBoard,
   createBoardLabel,
+  deleteBoard as deleteBoardRequest,
   getBoard,
   getBoardActivity,
   listWorkspaceBoards,
@@ -694,7 +695,6 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     title?: string;
     description?: string;
     visibility?: BoardVisibility;
-    archived?: boolean;
   }) {
     const updatedBoard = await updateBoardRequest(input);
 
@@ -704,23 +704,6 @@ export function DashboardShell({ user }: { user: AuthUser }) {
 
     setBoardsByWorkspaceId((current) => {
       const currentBoards = current[activeWorkspaceId] ?? [];
-
-      if (updatedBoard.archived) {
-        const remainingBoards = currentBoards.filter(
-          (board) => board.id !== updatedBoard.id,
-        );
-
-        setActiveBoardId((currentActiveBoardId) =>
-          currentActiveBoardId === updatedBoard.id
-            ? remainingBoards[0]?.id ?? ""
-            : currentActiveBoardId,
-        );
-
-        return {
-          ...current,
-          [activeWorkspaceId]: remainingBoards,
-        };
-      }
 
       return {
         ...current,
@@ -732,6 +715,50 @@ export function DashboardShell({ user }: { user: AuthUser }) {
 
     await refreshBoardDetail(updatedBoard.id);
     await refreshBoardActivity(updatedBoard.id);
+    await refreshWorkspaceActivity(activeWorkspaceId);
+  }
+
+  async function handleDeleteBoard(input: { boardId: string }) {
+    await deleteBoardRequest(input);
+
+    if (!activeWorkspaceId) {
+      return;
+    }
+
+    setBoardsByWorkspaceId((current) => {
+      const currentBoards = current[activeWorkspaceId] ?? [];
+      const remainingBoards = currentBoards.filter((board) => board.id !== input.boardId);
+
+      setActiveBoardId((currentActiveBoardId) =>
+        currentActiveBoardId === input.boardId
+          ? remainingBoards[0]?.id ?? ""
+          : currentActiveBoardId,
+      );
+
+      return {
+        ...current,
+        [activeWorkspaceId]: remainingBoards,
+      };
+    });
+
+    setBoardDetailsById((current) => {
+      const next = { ...current };
+      delete next[input.boardId];
+      return next;
+    });
+    setBoardActivityById((current) => {
+      const next = { ...current };
+      delete next[input.boardId];
+      return next;
+    });
+    setBoardListsById((current) => {
+      const next = { ...current };
+      delete next[input.boardId];
+      return next;
+    });
+    setCardDetailModalState((current) =>
+      current?.boardId === input.boardId ? null : current,
+    );
     await refreshWorkspaceActivity(activeWorkspaceId);
   }
 
@@ -790,7 +817,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     await refreshBoardActivity(input.boardId);
   }
 
-  async function handleArchiveList(input: { boardId: string; listId: string }) {
+  async function handleDeleteList(input: { boardId: string; listId: string }) {
     await deleteList(input);
     await refreshBoardLists(input.boardId);
     await refreshBoardActivity(input.boardId);
@@ -1015,7 +1042,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
     ]);
   }
 
-  async function handleArchiveCard(input: {
+  async function handleDeleteCard(input: {
     boardId: string;
     listId: string;
     cardId: string;
@@ -1250,7 +1277,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
                 cardsByListId={cardsByListId}
                 createListRequestId={createListRequestId}
                 lists={activeBoardLists}
-                onArchiveList={handleArchiveList}
+                onDeleteList={handleDeleteList}
                 onCreateBoardLabel={handleCreateBoardLabel}
                 onCreateCard={handleCreateCard}
                 onCreateList={handleCreateList}
@@ -1300,6 +1327,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
             activeBoardDetail.currentUserBoardRole === "MANAGER"
           }
           onClose={() => setIsBoardSettingsModalOpen(false)}
+          onDeleteBoard={handleDeleteBoard}
           onUpdateBoard={handleUpdateBoard}
         />
       ) : null}
@@ -1329,7 +1357,7 @@ export function DashboardShell({ user }: { user: AuthUser }) {
           activityItems={cardActivityById[cardDetailModalState.cardId] ?? []}
           boardLabels={activeBoardDetail?.labels ?? []}
           boardMembers={activeBoardDetail?.members ?? []}
-          canArchiveCard={
+          canDeleteCard={
             activeBoardDetail?.currentUserBoardRole === "MANAGER"
           }
           canEditCard={
@@ -1338,8 +1366,8 @@ export function DashboardShell({ user }: { user: AuthUser }) {
           }
           card={cardDetailsById[cardDetailModalState.cardId]!}
           initialTab={cardDetailModalState.initialTab}
-          onArchiveCard={() =>
-            handleArchiveCard({
+          onDeleteCard={() =>
+            handleDeleteCard({
               boardId: cardDetailModalState.boardId,
               listId: cardDetailModalState.listId,
               cardId: cardDetailModalState.cardId,

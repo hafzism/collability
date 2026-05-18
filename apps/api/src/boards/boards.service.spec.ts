@@ -5,10 +5,15 @@ import { BoardsService } from './boards.service';
 
 describe('BoardsService', () => {
   let service: BoardsService;
+  const activityService = {
+    log: jest.fn(),
+    formatBoardActivity: jest.fn(),
+  };
 
   const prismaService = {
     board: {
       create: jest.fn(),
+      delete: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -35,8 +40,9 @@ describe('BoardsService', () => {
       async (callback: (tx: typeof prismaService) => Promise<unknown>) =>
         callback(prismaService as any),
     );
-    prismaService.activityLog.create.mockResolvedValue(undefined);
-    service = new BoardsService(prismaService as any);
+    activityService.log.mockResolvedValue(undefined);
+    activityService.formatBoardActivity.mockReturnValue('formatted');
+    service = new BoardsService(prismaService as any, activityService as any);
   });
 
   it('creates the board creator as a manager', async () => {
@@ -87,7 +93,6 @@ describe('BoardsService', () => {
       expect.objectContaining({
         where: {
           workspaceId: 'workspace-1',
-          archived: false,
         },
       }),
     );
@@ -106,7 +111,6 @@ describe('BoardsService', () => {
       expect.objectContaining({
         where: {
           workspaceId: 'workspace-1',
-          archived: false,
           OR: [
             { visibility: 'WORKSPACE' },
             { members: { some: { userId: 'user-1' } } },
@@ -127,6 +131,9 @@ describe('BoardsService', () => {
       boardId: 'board-1',
       userId: 'user-2',
       role: BoardRole.VIEWER,
+      user: {
+        name: 'Alex',
+      },
     });
     prismaService.boardMember.update.mockResolvedValue({
       boardId: 'board-1',
@@ -146,6 +153,42 @@ describe('BoardsService', () => {
       userId: 'user-2',
       role: BoardRole.CONTRIBUTOR,
     });
+  });
+
+  it('deletes boards instead of archiving them', async () => {
+    prismaService.board.findUnique.mockResolvedValue({
+      id: 'board-1',
+      workspaceId: 'workspace-1',
+      title: 'Roadmap',
+    });
+    prismaService.board.delete.mockResolvedValue({
+      id: 'board-1',
+      workspaceId: 'workspace-1',
+      title: 'Roadmap',
+    });
+
+    await expect(service.deleteBoard('board-1', 'user-1')).resolves.toEqual({
+      id: 'board-1',
+      workspaceId: 'workspace-1',
+      title: 'Roadmap',
+    });
+
+    expect(prismaService.board.delete).toHaveBeenCalledWith({
+      where: { id: 'board-1' },
+    });
+    expect(activityService.log).toHaveBeenCalledWith(
+      prismaService,
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        userId: 'user-1',
+        entityType: 'board',
+        entityId: 'board-1',
+        action: 'board.deleted',
+        metadata: {
+          boardTitle: 'Roadmap',
+        },
+      }),
+    );
   });
 
   it('lists board activity items', async () => {
@@ -169,7 +212,7 @@ describe('BoardsService', () => {
     await expect(service.getBoardActivity('board-1')).resolves.toEqual([
       {
         id: 'log-1',
-        label: 'Hafeez created the board',
+        label: 'formatted',
         timestamp: new Date('2026-05-09T10:00:00.000Z'),
       },
     ]);

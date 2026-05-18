@@ -110,7 +110,6 @@ export function updateBoard(input: {
   title?: string;
   description?: string;
   visibility?: BoardVisibility;
-  archived?: boolean;
 }) {
   return apiRequest<BoardSummary>(`/boards/${input.boardId}`, {
     method: "PATCH",
@@ -118,8 +117,13 @@ export function updateBoard(input: {
       title: input.title,
       description: input.description,
       visibility: input.visibility,
-      archived: input.archived,
     },
+  });
+}
+
+export function deleteBoard(input: { boardId: string }) {
+  return apiRequest<void>(`/boards/${input.boardId}`, {
+    method: "DELETE",
   });
 }
 

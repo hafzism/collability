@@ -63,20 +63,6 @@ export class BoardGuard implements CanActivate {
       );
     }
 
-    if (board.archived) {
-      if (
-        workspaceRole !== WorkspaceRole.OWNER &&
-        workspaceRole !== WorkspaceRole.ADMIN
-      ) {
-        this.logger.warn(
-          `User ${user.id} denied access to archived Board ${boardId}`,
-        );
-        throw new ForbiddenException(
-          'This board is archived and can only be accessed by workspace admins',
-        );
-      }
-    }
-
     const boardMember = await this.boardsService.getBoardMembership(
       user.id,
       boardId,

@@ -360,7 +360,6 @@ export class BoardsService {
     workspaceId: string,
     userId: string,
     workspaceRole: WorkspaceRole,
-    includeArchived = false,
     limit = 50,
     offset = 0,
   ): Promise<Board[]> {
@@ -380,7 +379,6 @@ export class BoardsService {
     return this.prisma.board.findMany({
       where: {
         workspaceId,
-        archived: includeArchived ? undefined : false,
         ...accessFilter,
       },
       take: limit,
@@ -391,9 +389,7 @@ export class BoardsService {
   async updateBoard(
     boardId: string,
     actorUserId: string,
-    data: Partial<
-      Pick<Board, 'title' | 'description' | 'visibility' | 'archived'>
-    >,
+    data: Partial<Pick<Board, 'title' | 'description' | 'visibility'>>,
   ): Promise<Board> {
     if (data.title) data.title = sanitize(data.title);
     if (data.description) data.description = sanitize(data.description);
@@ -460,24 +456,36 @@ export class BoardsService {
         });
       }
 
-      if (data.archived === true && existingBoard.archived === false) {
-        await this.logBoardActivity(tx, {
-          workspaceId: existingBoard.workspaceId,
-          userId: actorUserId,
-          boardId,
-          action: 'board.archived',
-          metadata: {
-            boardTitle: board.title,
-          },
-        });
-      }
-
       return board;
     });
   }
 
   async deleteBoard(boardId: string, actorUserId: string): Promise<Board> {
-    return this.updateBoard(boardId, actorUserId, { archived: true });
+    return this.prisma.$transaction(async (tx) => {
+      const board = await tx.board.findUnique({
+        where: { id: boardId },
+      });
+
+      if (!board) {
+        throw new NotFoundException('Board not found');
+      }
+
+      const deletedBoard = await tx.board.delete({
+        where: { id: boardId },
+      });
+
+      await this.logBoardActivity(tx, {
+        workspaceId: board.workspaceId,
+        userId: actorUserId,
+        boardId,
+        action: 'board.deleted',
+        metadata: {
+          boardTitle: board.title,
+        },
+      });
+
+      return deletedBoard;
+    });
   }
 
   async getBoardActivity(boardId: string, limit = 20) {

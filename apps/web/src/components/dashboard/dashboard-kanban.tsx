@@ -55,7 +55,7 @@ type DashboardKanbanProps = {
   cardsByListId: Record<string, BoardCard[]>;
   createListRequestId: number;
   lists: BoardList[];
-  onArchiveList: (input: { boardId: string; listId: string }) => Promise<void>;
+  onDeleteList: (input: { boardId: string; listId: string }) => Promise<void>;
   onCreateBoardLabel: (input: {
     boardId: string;
     name: string;
@@ -165,6 +165,24 @@ function areCardOrdersEqual(left: BoardCard[], right: BoardCard[]) {
   }
 
   return left.every((card, index) => card.id === right[index]?.id);
+}
+
+function areListOrdersEqual(left: BoardList[], right: BoardList[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((list, index) => list.id === right[index]?.id);
+}
+
+function areCardsByListEqual(
+  left: CardsByListId,
+  right: CardsByListId,
+  listIds: string[],
+) {
+  return listIds.every((listId) =>
+    areCardOrdersEqual(left[listId] ?? [], right[listId] ?? []),
+  );
 }
 
 function getCardItemId(cardId: string) {
@@ -955,21 +973,21 @@ function SortableListColumn({
 
   return (
     <div
-      ref={setNodeRef}
-      className="relative min-h-0 w-[296px] shrink-0 self-start"
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-      }}
-      {...attributes}
-      {...listeners}
+      className="relative h-full min-h-0 w-[296px] shrink-0 self-stretch"
     >
       <div
+        ref={setNodeRef}
         className={cn(
-          "transition-opacity duration-200",
+          "h-full self-start transition-opacity duration-200",
           canManageLists && !isDraggingCard ? "cursor-grab active:cursor-grabbing" : "",
           isDragging ? "opacity-40" : "",
         )}
+        style={{
+          transform: CSS.Transform.toString(transform),
+          transition,
+        }}
+        {...attributes}
+        {...listeners}
       >
         {children}
       </div>
@@ -1044,7 +1062,7 @@ export function DashboardKanban({
   cardsByListId,
   createListRequestId,
   lists,
-  onArchiveList,
+  onDeleteList,
   onCreateBoardLabel,
   onCreateCard,
   onCreateList,
@@ -1122,8 +1140,16 @@ export function DashboardKanban({
     }
 
     const nextLists = sortListsByPosition(lists);
-    setOrderedLists(nextLists);
-    setOrderedCardsByListId(normalizeCardsByListId(nextLists, cardsByListId));
+    const nextCardsByListId = normalizeCardsByListId(nextLists, cardsByListId);
+
+    setOrderedLists((current) =>
+      areListOrdersEqual(current, nextLists) ? current : nextLists,
+    );
+    setOrderedCardsByListId((current) =>
+      areCardsByListEqual(current, nextCardsByListId, nextLists.map((list) => list.id))
+        ? current
+        : nextCardsByListId,
+    );
   }, [activeDrag, cardsByListId, lists]);
 
   useEffect(() => {
@@ -1186,7 +1212,8 @@ export function DashboardKanban({
     setOrderedCardsByListId(normalizeCardsByListId(sortListsByPosition(lists), cardsByListId));
     setActiveDrag(null);
     dragSnapshotRef.current = null;
-  }, [activeBoardId, cardsByListId, lists]);
+    lastCardOverRef.current = null;
+  }, [activeBoardId]);
 
   function openCreateListDraft() {
     setCreatingList(true);
@@ -1265,7 +1292,7 @@ export function DashboardKanban({
     setListError(null);
 
     try {
-      await onArchiveList({
+      await onDeleteList({
         boardId: activeBoardId,
         listId,
       });
@@ -1273,7 +1300,7 @@ export function DashboardKanban({
       setConfirmArchiveListId(null);
     } catch (error) {
       setListError(
-        error instanceof Error ? error.message : "Unable to archive list right now.",
+        error instanceof Error ? error.message : "Unable to delete list right now.",
       );
     } finally {
       setPendingListId(null);
@@ -1350,41 +1377,13 @@ export function DashboardKanban({
       return;
     }
 
-    const currentCards = [...(orderedCardsByListId[currentListId] ?? [])];
-    const sourceIndex = currentCards.findIndex((card) => card.id === activeDrag.cardId);
-    if (sourceIndex === -1) {
+    if (currentListId === targetListId) {
       return;
     }
 
-    if (currentListId === targetListId) {
-      const nextCards = [...currentCards];
-      const [movingCard] = nextCards.splice(sourceIndex, 1);
-      let targetIndex =
-        overData.type === "card"
-          ? nextCards.findIndex((card) => card.id === (overData.cardId as string))
-          : nextCards.length;
-
-      if (targetIndex === -1) {
-        targetIndex = nextCards.length;
-      }
-
-      const nextHoverKey = `${currentListId}:${targetIndex}:${activeDrag.cardId}`;
-      if (lastCardOverRef.current === nextHoverKey) {
-        return;
-      }
-
-      nextCards.splice(targetIndex, 0, movingCard);
-
-      const reorderedCards = renumberCards(nextCards, currentListId);
-      if (areCardOrdersEqual(reorderedCards, currentCards)) {
-        return;
-      }
-
-      lastCardOverRef.current = nextHoverKey;
-      setOrderedCardsByListId((current) => ({
-        ...current,
-        [currentListId]: reorderedCards,
-      }));
+    const currentCards = [...(orderedCardsByListId[currentListId] ?? [])];
+    const sourceIndex = currentCards.findIndex((card) => card.id === activeDrag.cardId);
+    if (sourceIndex === -1) {
       return;
     }
 
@@ -1506,24 +1505,68 @@ export function DashboardKanban({
     }
 
     const targetCards = orderedCardsByListId[targetListId] ?? [];
-    const targetIndex = targetCards.findIndex((card) => card.id === activeDrag.cardId);
     const sourceCardsBefore = snapshot.cardsByListId[activeDrag.sourceListId] ?? [];
     const sourceIndexBefore = sourceCardsBefore.findIndex(
       (card) => card.id === activeDrag.cardId,
     );
+    let targetIndex = targetCards.findIndex((card) => card.id === activeDrag.cardId);
 
-    if (targetIndex === -1) {
-      resetDraggedState();
-      return;
-    }
+    if (activeDrag.sourceListId === targetListId) {
+      const overData = event.over.data.current;
+      if (!overData) {
+        resetDraggedState();
+        return;
+      }
 
-    if (
-      activeDrag.sourceListId === targetListId &&
-      sourceIndexBefore === targetIndex
-    ) {
+      targetIndex =
+        overData.type === "card"
+          ? sourceCardsBefore.findIndex((card) => card.id === (overData.cardId as string))
+          : sourceCardsBefore.length - 1;
+
+      if (targetIndex === -1) {
+        targetIndex = sourceIndexBefore;
+      }
+
+      if (sourceIndexBefore === targetIndex) {
+        dragSnapshotRef.current = null;
+        lastCardOverRef.current = null;
+        setActiveDrag(null);
+        return;
+      }
+
+      const reorderedCards = moveArrayItem(
+        sourceCardsBefore,
+        sourceIndexBefore,
+        targetIndex,
+      );
+      const { beforeId, afterId } = getCardNeighbors(reorderedCards, targetIndex);
+
       dragSnapshotRef.current = null;
       lastCardOverRef.current = null;
       setActiveDrag(null);
+
+      try {
+        await onMoveCard({
+          boardId: activeBoardId,
+          cardId: activeDrag.cardId,
+          sourceListId: activeDrag.sourceListId,
+          targetListId,
+          beforeId,
+          afterId,
+          targetIndex,
+        });
+      } catch (error) {
+        setListError(
+          error instanceof Error ? error.message : "Unable to move card right now.",
+        );
+        setOrderedCardsByListId(snapshot.cardsByListId);
+      }
+
+      return;
+    }
+
+    if (targetIndex === -1) {
+      resetDraggedState();
       return;
     }
 
@@ -1578,7 +1621,7 @@ export function DashboardKanban({
           items={orderedLists.map((list) => getListItemId(list.id))}
           strategy={horizontalListSortingStrategy}
         >
-          <div className="flex h-full min-h-0 min-w-max items-start gap-4 pr-4">
+          <div className="flex h-full min-h-0 min-w-max items-stretch gap-4 pr-4">
             {orderedLists.map((column) => {
               const cards = orderedCardsByListId[column.id] ?? [];
               const draft = draftsByListId[column.id];
@@ -1590,7 +1633,7 @@ export function DashboardKanban({
                   canManageLists={canManageLists}
                   isDraggingCard={activeDrag?.type === "card"}
                 >
-                  <section className="ui-pressed-active flex max-h-full min-h-[220px] flex-col self-start overflow-visible rounded-[20px] border">
+                  <section className="ui-pressed-active flex h-full max-h-full min-h-[220px] flex-col overflow-visible rounded-[20px] border">
                     <header className="sticky top-0 z-[1] flex shrink-0 items-center justify-between bg-transparent px-4 py-3.5">
                       {editingListId === column.id ? (
                         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -1688,10 +1731,10 @@ export function DashboardKanban({
                           <div className="space-y-3 rounded-[12px] px-3 py-3">
                             <div>
                               <p className="text-[13px] font-medium text-[#f2d1cb]">
-                                Archive list?
+                                Delete list?
                               </p>
                               <p className="mt-1 text-[11px] leading-5 text-[#bb8f87]">
-                                Cards stay intact, but this list will leave the active board view.
+                                Are you sure you want to delete this list and all of its cards?
                               </p>
                             </div>
                             <div className="flex items-center justify-end gap-2">
@@ -1710,7 +1753,7 @@ export function DashboardKanban({
                                 disabled={pendingListId === column.id}
                                 className="ui-pressed-danger rounded-[10px] border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                {pendingListId === column.id ? "Archiving" : "Archive"}
+                                {pendingListId === column.id ? "Deleting" : "Delete"}
                               </button>
                             </div>
                           </div>
@@ -1734,7 +1777,7 @@ export function DashboardKanban({
                               onClick={() => setConfirmArchiveListId(column.id)}
                               className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] text-[#f0b3a8] transition hover:bg-[#2b1512] hover:text-[#ffd5cd]"
                             >
-                              <span>Archive list</span>
+                              <span>Delete list</span>
                             </button>
                           </>
                         )}

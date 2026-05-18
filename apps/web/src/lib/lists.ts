@@ -68,13 +68,11 @@ export function updateList(input: {
   boardId: string;
   listId: string;
   title?: string;
-  archived?: boolean;
 }) {
   return apiRequest<BoardList>(`/boards/${input.boardId}/lists/${input.listId}`, {
     method: "PATCH",
     body: {
       title: input.title,
-      archived: input.archived,
     },
   });
 }

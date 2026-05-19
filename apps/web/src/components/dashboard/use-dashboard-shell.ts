@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import {
   useQueries,
@@ -72,7 +72,10 @@ import {
   renumberCards,
   renumberLists,
 } from "./dashboard-shell-utils";
-import { type CardDetailModalState, useDashboardUiState } from "./use-dashboard-ui-state";
+import {
+  type CardDetailModalState,
+  useDashboardUiStore,
+} from "./use-dashboard-ui-store";
 import type {
   WorkspaceActivityItem,
   WorkspaceDetail,
@@ -81,42 +84,83 @@ import type {
 } from "./workspace-types";
 
 export function useDashboardShell(user: AuthUser) {
-  const ui = useDashboardUiState();
+  const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const queryClient = useQueryClient();
-
-  const {
-    accountMenuRef,
-    activeBoardId,
-    activeWorkspaceId,
-    cardDetailModalState,
-    createListRequestId,
-    isAccountMenuOpen,
-    isBoardActivityModalOpen,
-    isBoardMembersModalOpen,
-    isBoardSettingsModalOpen,
-    isCreateBoardModalOpen,
-    isCreateWorkspaceModalOpen,
-    isJoinWorkspaceModalOpen,
-    isSidebarOpen,
-    isWorkspaceMenuOpen,
-    setActiveBoardId,
-    setActiveWorkspaceId,
-    setCardDetailModalState,
-    setCreateListRequestId,
-    setIsAccountMenuOpen,
-    setIsBoardActivityModalOpen,
-    setIsBoardMembersModalOpen,
-    setIsBoardSettingsModalOpen,
-    setIsCreateBoardModalOpen,
-    setIsCreateWorkspaceModalOpen,
-    setIsJoinWorkspaceModalOpen,
-    setIsSidebarOpen,
-    setIsWorkspaceMenuOpen,
-    setWorkspaceDetails,
-    setWorkspaceDetailsWorkspaceId,
-    workspaceDetailsWorkspaceId,
-    workspaceMenuRef,
-  } = ui;
+  const activeBoardId = useDashboardUiStore((state) => state.activeBoardId);
+  const activeWorkspaceId = useDashboardUiStore((state) => state.activeWorkspaceId);
+  const cardDetailModalState = useDashboardUiStore(
+    (state) => state.cardDetailModalState,
+  );
+  const createListRequestId = useDashboardUiStore(
+    (state) => state.createListRequestId,
+  );
+  const isAccountMenuOpen = useDashboardUiStore(
+    (state) => state.isAccountMenuOpen,
+  );
+  const isBoardActivityModalOpen = useDashboardUiStore(
+    (state) => state.isBoardActivityModalOpen,
+  );
+  const isBoardMembersModalOpen = useDashboardUiStore(
+    (state) => state.isBoardMembersModalOpen,
+  );
+  const isBoardSettingsModalOpen = useDashboardUiStore(
+    (state) => state.isBoardSettingsModalOpen,
+  );
+  const isCreateBoardModalOpen = useDashboardUiStore(
+    (state) => state.isCreateBoardModalOpen,
+  );
+  const isCreateWorkspaceModalOpen = useDashboardUiStore(
+    (state) => state.isCreateWorkspaceModalOpen,
+  );
+  const isJoinWorkspaceModalOpen = useDashboardUiStore(
+    (state) => state.isJoinWorkspaceModalOpen,
+  );
+  const isSidebarOpen = useDashboardUiStore((state) => state.isSidebarOpen);
+  const isWorkspaceMenuOpen = useDashboardUiStore(
+    (state) => state.isWorkspaceMenuOpen,
+  );
+  const setActiveBoardId = useDashboardUiStore((state) => state.setActiveBoardId);
+  const setActiveWorkspaceId = useDashboardUiStore(
+    (state) => state.setActiveWorkspaceId,
+  );
+  const setCardDetailModalState = useDashboardUiStore(
+    (state) => state.setCardDetailModalState,
+  );
+  const setCreateListRequestId = useDashboardUiStore(
+    (state) => state.setCreateListRequestId,
+  );
+  const setIsAccountMenuOpen = useDashboardUiStore(
+    (state) => state.setIsAccountMenuOpen,
+  );
+  const setIsBoardActivityModalOpen = useDashboardUiStore(
+    (state) => state.setIsBoardActivityModalOpen,
+  );
+  const setIsBoardMembersModalOpen = useDashboardUiStore(
+    (state) => state.setIsBoardMembersModalOpen,
+  );
+  const setIsBoardSettingsModalOpen = useDashboardUiStore(
+    (state) => state.setIsBoardSettingsModalOpen,
+  );
+  const setIsCreateBoardModalOpen = useDashboardUiStore(
+    (state) => state.setIsCreateBoardModalOpen,
+  );
+  const setIsCreateWorkspaceModalOpen = useDashboardUiStore(
+    (state) => state.setIsCreateWorkspaceModalOpen,
+  );
+  const setIsJoinWorkspaceModalOpen = useDashboardUiStore(
+    (state) => state.setIsJoinWorkspaceModalOpen,
+  );
+  const setIsSidebarOpen = useDashboardUiStore((state) => state.setIsSidebarOpen);
+  const setIsWorkspaceMenuOpen = useDashboardUiStore(
+    (state) => state.setIsWorkspaceMenuOpen,
+  );
+  const setWorkspaceDetailsWorkspaceId = useDashboardUiStore(
+    (state) => state.setWorkspaceDetailsWorkspaceId,
+  );
+  const workspaceDetailsWorkspaceId = useDashboardUiStore(
+    (state) => state.workspaceDetailsWorkspaceId,
+  );
 
   const workspacesQuery = useQuery({
     queryKey: dashboardQueryKeys.workspaces.all,
@@ -219,10 +263,6 @@ export function useDashboardShell(user: AuthUser) {
   });
 
   const workspaceDetails = workspaceDetailsQuery.data ?? null;
-
-  useEffect(() => {
-    setWorkspaceDetails(workspaceDetails);
-  }, [setWorkspaceDetails, workspaceDetails]);
 
   const workspaceActivityQuery = useQuery({
     queryKey: dashboardQueryKeys.workspaces.activity(workspaceDetailsWorkspaceId ?? ""),
@@ -954,7 +994,6 @@ export function useDashboardShell(user: AuthUser) {
     });
 
     setWorkspaceDetailsWorkspaceId(null);
-    setWorkspaceDetails(null);
     setIsWorkspaceMenuOpen(false);
   }
 
@@ -1009,7 +1048,6 @@ export function useDashboardShell(user: AuthUser) {
     );
 
     setWorkspaceDetailsWorkspaceId(null);
-    setWorkspaceDetails(null);
   }
 
   return {

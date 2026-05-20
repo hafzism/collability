@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  type CollisionDetection,
   closestCenter,
   DndContext,
   DragOverlay,
   MouseSensor,
   TouchSensor,
+  pointerWithin,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -450,6 +452,7 @@ export function DashboardKanban({
     cardsByListId: CardsByListId;
   } | null>(null);
   const lastCardOverRef = useRef<string | null>(null);
+  const activeDragRef = useRef<ActiveDrag | null>(null);
   const sortedLists = useMemo(() => sortListsByPosition(lists), [lists]);
   const sensors = useSensors(
     useSensor(BoardMouseSensor),
@@ -482,9 +485,43 @@ export function DashboardKanban({
         : null,
     [activeDrag, orderedLists],
   );
+  const collisionDetection = useCallback<CollisionDetection>(
+    (args) => {
+      const pointerCollisions = pointerWithin(args);
+
+      if (pointerCollisions.length > 0) {
+        const findCollisionByType = (type: "card" | "list-drop" | "list") =>
+          pointerCollisions.find((collision) => {
+            const container = args.droppableContainers.find(
+              (droppable) => droppable.id === collision.id,
+            );
+
+            return container?.data.current?.type === type;
+          });
+
+        const prioritizedCollision =
+          findCollisionByType("card") ??
+          findCollisionByType("list-drop") ??
+          findCollisionByType("list");
+
+        if (prioritizedCollision) {
+          return [prioritizedCollision];
+        }
+
+        return pointerCollisions;
+      }
+
+      return closestCenter(args);
+    },
+    [],
+  );
 
   useEffect(() => {
-    if (activeDrag) {
+    activeDragRef.current = activeDrag;
+  }, [activeDrag]);
+
+  useEffect(() => {
+    if (activeDragRef.current) {
       return;
     }
 
@@ -499,7 +536,7 @@ export function DashboardKanban({
         ? current
         : nextCardsByListId,
     );
-  }, [activeDrag, cardsByListId, lists]);
+  }, [cardsByListId, lists]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -865,7 +902,12 @@ export function DashboardKanban({
       return;
     }
 
-    const targetListId = findCardListId(orderedCardsByListId, activeDrag.cardId);
+    const overData = event.over.data.current;
+    const targetListId =
+      overData?.type === "card" || overData?.type === "list-drop"
+        ? (overData.listId as string)
+        : findCardListId(orderedCardsByListId, activeDrag.cardId);
+
     if (!targetListId) {
       resetDraggedState();
       return;
@@ -876,10 +918,14 @@ export function DashboardKanban({
     const sourceIndexBefore = sourceCardsBefore.findIndex(
       (card) => card.id === activeDrag.cardId,
     );
-    let targetIndex = targetCards.findIndex((card) => card.id === activeDrag.cardId);
+    let targetIndex =
+      overData?.type === "card"
+        ? targetCards.findIndex((card) => card.id === (overData.cardId as string))
+        : overData?.type === "list-drop"
+          ? targetCards.length
+          : targetCards.findIndex((card) => card.id === activeDrag.cardId);
 
     if (activeDrag.sourceListId === targetListId) {
-      const overData = event.over.data.current;
       if (!overData) {
         resetDraggedState();
         return;
@@ -907,6 +953,12 @@ export function DashboardKanban({
         targetIndex,
       );
       const { beforeId, afterId } = getCardNeighbors(reorderedCards, targetIndex);
+      const nextOrderedCards = renumberCards(reorderedCards, targetListId);
+
+      setOrderedCardsByListId((current) => ({
+        ...current,
+        [targetListId]: nextOrderedCards,
+      }));
 
       dragSnapshotRef.current = null;
       lastCardOverRef.current = null;
@@ -933,8 +985,7 @@ export function DashboardKanban({
     }
 
     if (targetIndex === -1) {
-      resetDraggedState();
-      return;
+      targetIndex = targetCards.length;
     }
 
     const { beforeId, afterId } = getCardNeighbors(targetCards, targetIndex);
@@ -977,7 +1028,7 @@ export function DashboardKanban({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={(event) => void handleDragEnd(event)}

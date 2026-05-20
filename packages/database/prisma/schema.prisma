@@ -49,6 +49,7 @@ model User {
   comments             Comment[]
   activityLogs         ActivityLog[]
   assignedCards        CardAssignee[]
+  authSessions         AuthSession[]
 }
 
 model EmailOtpVerification {
@@ -62,6 +63,26 @@ model EmailOtpVerification {
   updatedAt  DateTime @updatedAt
 
   @@index([email, createdAt])
+}
+
+model AuthSession {
+  id                      String   @id
+  userId                  String
+  tokenFamily             String
+  currentRefreshTokenHash String
+  ipAddress               String?
+  userAgent               String?
+  lastSeenAt              DateTime @default(now())
+  expiresAt               DateTime
+  revokedAt               DateTime?
+  revokedReason           String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([tokenFamily])
 }
 
 //--------------------

@@ -29,7 +29,9 @@ type DashboardSidebarProps = {
   onCreateBoard: () => void;
   onCreateWorkspace: () => void;
   onJoinWorkspace: () => void;
+  onOpenSettings: () => void;
   onOpenWorkspaceDetails: (workspaceId: string) => void;
+  onLogout: () => void;
   onWorkspaceMenuToggle: () => void;
   onWorkspaceSelect: (workspaceId: string) => void;
   userInitials: string;
@@ -52,7 +54,9 @@ export function DashboardSidebar({
   onCreateBoard,
   onCreateWorkspace,
   onJoinWorkspace,
+  onOpenSettings,
   onOpenWorkspaceDetails,
+  onLogout,
   onWorkspaceMenuToggle,
   onWorkspaceSelect,
   userInitials,
@@ -250,7 +254,7 @@ export function DashboardSidebar({
             <div className="absolute inset-x-3 bottom-[calc(100%+8px)] z-20 rounded-[14px] border border-white/8 bg-[#151515] p-1.5 shadow-[0_24px_50px_rgba(0,0,0,0.48)]">
               <button
                 type="button"
-                onClick={onAccountMenuToggle}
+                onClick={onOpenSettings}
                 className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] text-[#d9d9d6] transition hover:bg-white/6 hover:text-white"
               >
                 <Settings2 className="h-4 w-4 text-[#7d7d7d]" />
@@ -267,7 +271,7 @@ export function DashboardSidebar({
               <div className="mt-1 border-t border-white/6 pt-1.5">
                 <button
                   type="button"
-                  onClick={onAccountMenuToggle}
+                  onClick={onLogout}
                   className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[13px] text-[#d9d9d6] transition hover:bg-white/6 hover:text-white"
                 >
                   <LogOut className="h-4 w-4 text-[#7d7d7d]" />

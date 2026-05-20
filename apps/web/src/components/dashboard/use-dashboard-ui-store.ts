@@ -15,6 +15,7 @@ type DashboardUiState = {
   cardDetailModalState: CardDetailModalState | null;
   createListRequestId: number;
   isAccountMenuOpen: boolean;
+  isAccountSettingsModalOpen: boolean;
   isBoardActivityModalOpen: boolean;
   isBoardMembersModalOpen: boolean;
   isBoardSettingsModalOpen: boolean;
@@ -40,6 +41,9 @@ type DashboardUiState = {
     value: number | ((currentValue: number) => number),
   ) => void;
   setIsAccountMenuOpen: (
+    value: boolean | ((currentValue: boolean) => boolean),
+  ) => void;
+  setIsAccountSettingsModalOpen: (
     value: boolean | ((currentValue: boolean) => boolean),
   ) => void;
   setIsBoardActivityModalOpen: (
@@ -86,6 +90,7 @@ export const useDashboardUiStore = create<DashboardUiState>((set) => ({
   cardDetailModalState: null,
   createListRequestId: 0,
   isAccountMenuOpen: false,
+  isAccountSettingsModalOpen: false,
   isBoardActivityModalOpen: false,
   isBoardMembersModalOpen: false,
   isBoardSettingsModalOpen: false,
@@ -114,6 +119,13 @@ export const useDashboardUiStore = create<DashboardUiState>((set) => ({
   setIsAccountMenuOpen: (value) =>
     set((state) => ({
       isAccountMenuOpen: resolveValue(value, state.isAccountMenuOpen),
+    })),
+  setIsAccountSettingsModalOpen: (value) =>
+    set((state) => ({
+      isAccountSettingsModalOpen: resolveValue(
+        value,
+        state.isAccountSettingsModalOpen,
+      ),
     })),
   setIsBoardActivityModalOpen: (value) =>
     set((state) => ({

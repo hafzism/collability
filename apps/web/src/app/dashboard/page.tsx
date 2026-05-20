@@ -2,14 +2,20 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { dashboardQueryKeys } from "@/components/dashboard/dashboard-query-keys";
-import { getCurrentUser, getErrorMessage, type AuthUser } from "@/lib/auth";
+import {
+  getCurrentUser,
+  getErrorMessage,
+  logout,
+  type AuthUser,
+} from "@/lib/auth";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const currentUserQuery = useQuery<AuthUser>({
     queryKey: dashboardQueryKeys.auth.currentUser,
     queryFn: getCurrentUser,
@@ -18,9 +24,16 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (currentUserQuery.isError) {
+      queryClient.clear();
       router.replace("/login");
     }
-  }, [currentUserQuery.isError, router]);
+  }, [currentUserQuery.isError, queryClient, router]);
+
+  async function handleLogout() {
+    await logout();
+    queryClient.clear();
+    router.replace("/login");
+  }
 
   if (!currentUserQuery.data) {
     return (
@@ -45,5 +58,5 @@ export default function DashboardPage() {
     );
   }
 
-  return <DashboardShell user={currentUserQuery.data} />;
+  return <DashboardShell user={currentUserQuery.data} onLogout={handleLogout} />;
 }

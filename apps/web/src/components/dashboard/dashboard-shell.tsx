@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import { type AuthUser } from "@/lib/auth";
 
+import { AccountSettingsModal } from "./account-settings-modal";
 import { BoardActivityModal } from "./board-activity-modal";
 import { BoardMembersModal } from "./board-members-modal";
 import { BoardSettingsModal } from "./board-settings-modal";
@@ -16,7 +17,13 @@ import { JoinWorkspaceModal } from "./join-workspace-modal";
 import { useDashboardShell } from "./use-dashboard-shell";
 import { WorkspaceDetailsModal } from "./workspace-details-modal";
 
-export function DashboardShell({ user }: { user: AuthUser }) {
+export function DashboardShell({
+  user,
+  onLogout,
+}: {
+  user: AuthUser;
+  onLogout: () => void;
+}) {
   const dashboard = useDashboardShell(user);
   const cardDetailModalState = dashboard.cardDetailModalState;
 
@@ -39,6 +46,11 @@ export function DashboardShell({ user }: { user: AuthUser }) {
           onCreateBoard={() => dashboard.setIsCreateBoardModalOpen(true)}
           onCreateWorkspace={() => dashboard.setIsCreateWorkspaceModalOpen(true)}
           onJoinWorkspace={() => dashboard.setIsJoinWorkspaceModalOpen(true)}
+          onOpenSettings={() => {
+            dashboard.setIsAccountMenuOpen(false);
+            dashboard.setIsAccountSettingsModalOpen(true);
+          }}
+          onLogout={onLogout}
           onOpenWorkspaceDetails={(workspaceId) => {
             dashboard.setWorkspaceDetailsWorkspaceId(workspaceId);
             dashboard.setIsWorkspaceMenuOpen(false);
@@ -264,6 +276,17 @@ export function DashboardShell({ user }: { user: AuthUser }) {
           onUpdateMemberRole={dashboard.handleUpdateWorkspaceMemberRole}
           onUpdateWorkspace={dashboard.handleUpdateWorkspace}
           workspace={dashboard.workspaceDetails}
+        />
+      ) : null}
+
+      {dashboard.isAccountSettingsModalOpen ? (
+        <AccountSettingsModal
+          errorMessage={dashboard.accountSessionsErrorMessage}
+          isLoading={dashboard.accountSessionsStatus === "pending"}
+          onClose={() => dashboard.setIsAccountSettingsModalOpen(false)}
+          onLogoutDevice={dashboard.handleLogoutDeviceSession}
+          onLogoutOtherDevices={dashboard.handleLogoutOtherDevices}
+          sessions={dashboard.accountSessions}
         />
       ) : null}
     </div>

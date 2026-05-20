@@ -1,6 +1,7 @@
 export const dashboardQueryKeys = {
   auth: {
     currentUser: ["auth", "current-user"] as const,
+    sessions: ["auth", "sessions"] as const,
   },
   workspaces: {
     all: ["workspaces"] as const,

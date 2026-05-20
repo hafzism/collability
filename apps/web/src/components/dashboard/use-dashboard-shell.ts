@@ -8,7 +8,13 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
-import { getErrorMessage, type AuthUser } from "@/lib/auth";
+import {
+  getErrorMessage,
+  listSessions,
+  logoutDeviceSession,
+  logoutOtherDevices,
+  type AuthUser,
+} from "@/lib/auth";
 import {
   addBoardMember,
   createBoard,
@@ -98,6 +104,9 @@ export function useDashboardShell(user: AuthUser) {
   const isAccountMenuOpen = useDashboardUiStore(
     (state) => state.isAccountMenuOpen,
   );
+  const isAccountSettingsModalOpen = useDashboardUiStore(
+    (state) => state.isAccountSettingsModalOpen,
+  );
   const isBoardActivityModalOpen = useDashboardUiStore(
     (state) => state.isBoardActivityModalOpen,
   );
@@ -132,6 +141,9 @@ export function useDashboardShell(user: AuthUser) {
   );
   const setIsAccountMenuOpen = useDashboardUiStore(
     (state) => state.setIsAccountMenuOpen,
+  );
+  const setIsAccountSettingsModalOpen = useDashboardUiStore(
+    (state) => state.setIsAccountSettingsModalOpen,
   );
   const setIsBoardActivityModalOpen = useDashboardUiStore(
     (state) => state.setIsBoardActivityModalOpen,
@@ -322,6 +334,12 @@ export function useDashboardShell(user: AuthUser) {
     enabled: Boolean(cardDetailModalState),
   });
 
+  const accountSessionsQuery = useQuery({
+    queryKey: dashboardQueryKeys.auth.sessions,
+    queryFn: listSessions,
+    enabled: isAccountSettingsModalOpen,
+  });
+
   const boardActivityById = useMemo<Record<string, BoardActivityItem[]>>(
     () =>
       activeBoard && activeBoardActivityQuery.data
@@ -463,6 +481,12 @@ export function useDashboardShell(user: AuthUser) {
         input.listId,
         input.cardId,
       ),
+    });
+  }
+
+  async function refreshAccountSessions() {
+    await queryClient.invalidateQueries({
+      queryKey: dashboardQueryKeys.auth.sessions,
     });
   }
 
@@ -1050,7 +1074,22 @@ export function useDashboardShell(user: AuthUser) {
     setWorkspaceDetailsWorkspaceId(null);
   }
 
+  async function handleLogoutOtherDevices() {
+    await logoutOtherDevices();
+    await refreshAccountSessions();
+  }
+
+  async function handleLogoutDeviceSession(sessionId: string) {
+    await logoutDeviceSession(sessionId);
+    await refreshAccountSessions();
+  }
+
   return {
+    accountSessions: accountSessionsQuery.data ?? [],
+    accountSessionsErrorMessage: accountSessionsQuery.error
+      ? getErrorMessage(accountSessionsQuery.error, "Unable to load devices.")
+      : null,
+    accountSessionsStatus: accountSessionsQuery.status,
     accountMenuRef,
     activeBoard,
     activeBoardDetail,
@@ -1079,6 +1118,8 @@ export function useDashboardShell(user: AuthUser) {
     handleDeleteWorkspace,
     handleInviteWorkspaceMember,
     handleJoinWorkspace,
+    handleLogoutDeviceSession,
+    handleLogoutOtherDevices,
     handleLeaveWorkspace,
     handleMoveCard,
     handleOpenCardDetail,
@@ -1093,6 +1134,7 @@ export function useDashboardShell(user: AuthUser) {
     handleUpdateWorkspace,
     handleUpdateWorkspaceMemberRole,
     isAccountMenuOpen,
+    isAccountSettingsModalOpen,
     isBoardActivityModalOpen,
     isBoardMembersModalOpen,
     isBoardSettingsModalOpen,
@@ -1104,6 +1146,7 @@ export function useDashboardShell(user: AuthUser) {
     setCardDetailModalState,
     setCreateListRequestId,
     setIsAccountMenuOpen,
+    setIsAccountSettingsModalOpen,
     setIsBoardActivityModalOpen,
     setIsBoardMembersModalOpen,
     setIsBoardSettingsModalOpen,

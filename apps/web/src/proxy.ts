@@ -1,20 +1,22 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { AUTH_COOKIE_NAME } from "@/lib/auth";
+import { REFRESH_TOKEN_COOKIE_NAME } from "@/lib/auth-constants";
 
 const protectedRoutes = new Set(["/dashboard"]);
 const guestOnlyRoutes = new Set(["/", "/login", "/signup"]);
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const hasAuthCookie = Boolean(request.cookies.get(AUTH_COOKIE_NAME)?.value);
+  const hasRefreshCookie = Boolean(
+    request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value,
+  );
 
-  if (!hasAuthCookie && protectedRoutes.has(pathname)) {
+  if (!hasRefreshCookie && protectedRoutes.has(pathname)) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (hasAuthCookie && guestOnlyRoutes.has(pathname)) {
+  if (hasRefreshCookie && guestOnlyRoutes.has(pathname)) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

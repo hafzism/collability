@@ -5,9 +5,11 @@ import { BoardRole } from '../enums/board-role.enum';
 
 export interface AuthenticatedRequest extends Request {
   user: UserEntity;
+  auth?: {
+    sessionId?: string;
+  };
   workspaceId?: string;
   workspaceRole?: WorkspaceRole;
   boardId?: string;
   boardRole?: BoardRole;
 }
-

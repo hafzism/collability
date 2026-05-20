@@ -1,5 +1,4 @@
 import { JwtStrategy } from './jwt.strategy';
-import { AUTH_COOKIE_NAME } from '../constants/auth-cookie';
 
 describe('JwtStrategy', () => {
   const configService = {
@@ -20,23 +19,7 @@ describe('JwtStrategy', () => {
     jest.clearAllMocks();
   });
 
-  it('extracts the JWT from the auth cookie first', () => {
-    const strategy = new JwtStrategy(configService as any, usersService as any);
-    const extractor = (strategy as any)._jwtFromRequest as (request: unknown) => string | null;
-
-    expect(
-      extractor({
-        cookies: {
-          [AUTH_COOKIE_NAME]: 'cookie-token',
-        },
-        headers: {
-          authorization: 'Bearer header-token',
-        },
-      }),
-    ).toBe('cookie-token');
-  });
-
-  it('falls back to the bearer token when no auth cookie is present', () => {
+  it('extracts the access token from the authorization bearer header', () => {
     const strategy = new JwtStrategy(configService as any, usersService as any);
     const extractor = (strategy as any)._jwtFromRequest as (request: unknown) => string | null;
 
@@ -47,5 +30,19 @@ describe('JwtStrategy', () => {
         },
       }),
     ).toBe('header-token');
+  });
+
+  it('does not authenticate API requests from the refresh cookie', () => {
+    const strategy = new JwtStrategy(configService as any, usersService as any);
+    const extractor = (strategy as any)._jwtFromRequest as (request: unknown) => string | null;
+
+    expect(
+      extractor({
+        cookies: {
+          collability_refresh: 'refresh-cookie-token',
+        },
+        headers: {},
+      }),
+    ).toBeNull();
   });
 });

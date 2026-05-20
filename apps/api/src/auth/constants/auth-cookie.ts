@@ -1,8 +1,8 @@
 import { CookieOptions } from 'express';
 
-export const AUTH_COOKIE_NAME = 'collability_auth';
+export const REFRESH_TOKEN_COOKIE_NAME = 'collability_refresh';
 
-export function getAuthCookieOptions(): CookieOptions {
+export function getRefreshTokenCookieOptions(): CookieOptions {
   const isProduction = process.env.NODE_ENV === 'production';
 
   return {

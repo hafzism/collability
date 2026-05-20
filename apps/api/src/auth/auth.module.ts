@@ -21,7 +21,7 @@ import { AuthMailerService } from './auth-mailer.service';
         if (!secret) throw new Error('JWT_SECRET must be set');
         return {
           secret,
-          signOptions: { expiresIn: '7d' },
+          signOptions: { expiresIn: '15m' },
         };
       },
       inject: [ConfigService],

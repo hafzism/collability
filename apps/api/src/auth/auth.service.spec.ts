@@ -55,6 +55,7 @@ describe('AuthService production auth flow', () => {
       const values: Record<string, string | number> = {
         JWT_EXPIRES_IN: '15m',
         REFRESH_TOKEN_EXPIRES_IN: '7d',
+        REFRESH_TOKEN_TTL_MS: '604800000',
         REFRESH_TOKEN_SECRET: 'refresh-secret',
         OTP_EXPIRES_MINUTES: 10,
         OTP_VERIFICATION_EXPIRES_IN: '30m',

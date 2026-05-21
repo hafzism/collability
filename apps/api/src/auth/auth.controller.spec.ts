@@ -28,6 +28,7 @@ describe('AuthController', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    process.env.REFRESH_TOKEN_TTL_MS = '604800000';
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],

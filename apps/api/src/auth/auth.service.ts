@@ -479,11 +479,19 @@ export class AuthService {
   }
 
   private getJwtExpiresIn() {
-    return this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m';
+    const value = this.configService.get<string>('JWT_EXPIRES_IN');
+    if (!value) {
+      throw new Error('JWT_EXPIRES_IN must be set');
+    }
+    return value;
   }
 
   private getRefreshTokenExpiresIn() {
-    return this.configService.get<string>('REFRESH_TOKEN_EXPIRES_IN') ?? '7d';
+    const value = this.configService.get<string>('REFRESH_TOKEN_EXPIRES_IN');
+    if (!value) {
+      throw new Error('REFRESH_TOKEN_EXPIRES_IN must be set');
+    }
+    return value;
   }
 
   private getRefreshTokenExpiresAt() {
@@ -491,30 +499,42 @@ export class AuthService {
   }
 
   private getRefreshTokenTtlMs() {
-    return Number(this.configService.get<string>('REFRESH_TOKEN_TTL_MS') ?? 7 * 24 * 60 * 60 * 1000);
+    const value = this.configService.get<string>('REFRESH_TOKEN_TTL_MS');
+    if (!value) {
+      throw new Error('REFRESH_TOKEN_TTL_MS must be set');
+    }
+    return Number(value);
   }
 
   private getRefreshTokenSecret() {
-    return (
-      this.configService.get<string>('REFRESH_TOKEN_SECRET') ??
-      this.configService.get<string>('JWT_SECRET') ??
-      'development-refresh-secret'
-    );
+    const value = this.configService.get<string>('REFRESH_TOKEN_SECRET');
+    if (!value) {
+      throw new Error('REFRESH_TOKEN_SECRET must be set');
+    }
+    return value;
   }
 
   private getOtpExpiresMinutes() {
-    return Number(this.configService.get<string>('OTP_EXPIRES_MINUTES') ?? 10);
+    const value = this.configService.get<string>('OTP_EXPIRES_MINUTES');
+    if (!value) {
+      throw new Error('OTP_EXPIRES_MINUTES must be set');
+    }
+    return Number(value);
   }
 
   private getOtpVerificationExpiresIn() {
-    return this.configService.get<string>('OTP_VERIFICATION_EXPIRES_IN') ?? '30m';
+    const value = this.configService.get<string>('OTP_VERIFICATION_EXPIRES_IN');
+    if (!value) {
+      throw new Error('OTP_VERIFICATION_EXPIRES_IN must be set');
+    }
+    return value;
   }
 
   private getOtpVerificationSecret() {
-    return (
-      this.configService.get<string>('OTP_VERIFICATION_SECRET') ??
-      this.configService.get<string>('JWT_SECRET') ??
-      'development-otp-secret'
-    );
+    const value = this.configService.get<string>('OTP_VERIFICATION_SECRET');
+    if (!value) {
+      throw new Error('OTP_VERIFICATION_SECRET must be set');
+    }
+    return value;
   }
 }

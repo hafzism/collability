@@ -17,12 +17,16 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.set('trust proxy', 1);
+  const webAppUrl = process.env.WEB_APP_URL;
+  if (!webAppUrl) {
+    throw new Error('WEB_APP_URL must be set');
+  }
   const cookieParserFactory = cookieParser as unknown as () => Parameters<
     typeof app.use
   >[0];
   app.use(cookieParserFactory());
   app.enableCors({
-    origin: process.env.WEB_APP_URL ?? 'http://localhost:3000',
+    origin: webAppUrl,
     credentials: true,
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));

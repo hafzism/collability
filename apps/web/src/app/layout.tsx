@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Lexend } from "next/font/google";
 
+import { AppQueryProvider } from "@/components/providers/query-provider";
 import { AppChrome } from "@/components/layout/app-chrome";
 import { siteMetadata } from "@/constants/site";
 
@@ -39,7 +40,9 @@ export default function RootLayout({
       className={`dark scroll-smooth antialiased ${inter.variable} ${lexend.variable}`}
     >
       <body className="flex min-h-screen flex-col font-sans">
-        <AppChrome>{children}</AppChrome>
+        <AppQueryProvider>
+          <AppChrome>{children}</AppChrome>
+        </AppQueryProvider>
       </body>
     </html>
   );

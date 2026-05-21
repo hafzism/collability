@@ -13,7 +13,11 @@ export class ListsService {
     private readonly boardsService: BoardsService,
   ) {}
 
-  async createList(boardId: string, title: string): Promise<List> {
+  async createList(
+    boardId: string,
+    actorUserId: string,
+    title: string,
+  ): Promise<List> {
     const board = await this.boardsService.getBoardById(boardId);
     if (!board) {
       throw new NotFoundException('Board not found');
@@ -29,13 +33,26 @@ export class ListsService {
 
       const position = lastList ? BigInt(lastList.position) + 1000n : 1000n;
 
-      return tx.list.create({
+      const list = await tx.list.create({
         data: {
           boardId,
           title: sanitize(title),
           position,
         },
       });
+
+      await this.boardsService.logBoardActivity(tx, {
+        workspaceId: board.workspaceId,
+        userId: actorUserId,
+        boardId,
+        action: 'list.created',
+        metadata: {
+          listId: list.id,
+          listTitle: list.title,
+        },
+      });
+
+      return list;
     });
   }
 
@@ -130,11 +147,10 @@ export class ListsService {
     });
   }
 
-  async getBoardLists(boardId: string, includeArchived = false, limit = 50, offset = 0): Promise<List[]> {
+  async getBoardLists(boardId: string, limit = 50, offset = 0): Promise<List[]> {
     return this.prisma.list.findMany({
       where: {
         boardId,
-        archived: includeArchived ? undefined : false,
       },
       orderBy: { position: 'asc' },
       take: limit,
@@ -142,31 +158,83 @@ export class ListsService {
     });
   }
 
-  async updateList(boardId: string, listId: string, data: { title?: string; archived?: boolean }): Promise<List> {
+  async updateList(
+    boardId: string,
+    listId: string,
+    actorUserId: string,
+    data: { title?: string },
+  ): Promise<List> {
     const list = await this.prisma.list.findFirst({
       where: { id: listId, boardId },
+      include: {
+        board: {
+          select: {
+            workspaceId: true,
+          },
+        },
+      },
     });
     
     if (!list) throw new NotFoundException('List not found');
 
     if (data.title) data = { ...data, title: sanitize(data.title) };
 
-    return this.prisma.list.update({
-      where: { id: listId },
-      data,
+    return this.prisma.$transaction(async (tx) => {
+      const updatedList = await tx.list.update({
+        where: { id: listId },
+        data,
+      });
+
+      if (data.title !== undefined && data.title !== list.title) {
+        await this.boardsService.logBoardActivity(tx, {
+          workspaceId: list.board.workspaceId,
+          userId: actorUserId,
+          boardId,
+          action: 'list.renamed',
+          metadata: {
+            listId,
+            oldTitle: list.title,
+            newTitle: updatedList.title,
+          },
+        });
+      }
+      return updatedList;
     });
   }
 
-  async deleteList(boardId: string, listId: string): Promise<List> {
+  async deleteList(boardId: string, listId: string, actorUserId: string): Promise<List> {
     const list = await this.prisma.list.findFirst({
       where: { id: listId, boardId },
+      include: {
+        board: {
+          select: {
+            workspaceId: true,
+          },
+        },
+      },
     });
-    
-    if (!list) throw new NotFoundException('List not found');
 
-    return this.prisma.list.update({
-      where: { id: listId },
-      data: { archived: true },
+    if (!list) {
+      throw new NotFoundException('List not found');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const deletedList = await tx.list.delete({
+        where: { id: listId },
+      });
+
+      await this.boardsService.logBoardActivity(tx, {
+        workspaceId: list.board.workspaceId,
+        userId: actorUserId,
+        boardId,
+        action: 'list.deleted',
+        metadata: {
+          listId,
+          listTitle: list.title,
+        },
+      });
+
+      return deletedList;
     });
   }
 }

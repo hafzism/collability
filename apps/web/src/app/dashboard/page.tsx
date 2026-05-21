@@ -1,47 +1,41 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
-import { getCurrentUser, getErrorMessage, type AuthUser } from "@/lib/auth";
+import { dashboardQueryKeys } from "@/components/dashboard/dashboard-query-keys";
+import {
+  getCurrentUser,
+  getErrorMessage,
+  logout,
+  type AuthUser,
+} from "@/lib/auth";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const currentUserQuery = useQuery<AuthUser>({
+    queryKey: dashboardQueryKeys.auth.currentUser,
+    queryFn: getCurrentUser,
+    retry: false,
+  });
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadCurrentUser() {
-      try {
-        const currentUser = await getCurrentUser();
-        if (!isMounted) {
-          return;
-        }
-
-        setUser(currentUser);
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        setErrorMessage(
-          getErrorMessage(error, "Your session expired. Please sign in again."),
-        );
-        router.replace("/login");
-      }
+    if (currentUserQuery.isError) {
+      queryClient.clear();
+      router.replace("/login");
     }
+  }, [currentUserQuery.isError, queryClient, router]);
 
-    void loadCurrentUser();
+  async function handleLogout() {
+    await logout();
+    queryClient.clear();
+    router.replace("/login");
+  }
 
-    return () => {
-      isMounted = false;
-    };
-  }, [router]);
-
-  if (!user) {
+  if (!currentUserQuery.data) {
     return (
       <main className="flex min-h-screen items-center justify-center px-6">
         <div className="text-center">
@@ -52,12 +46,17 @@ export default function DashboardPage() {
             Loading your workspace...
           </h1>
           <p className="mt-3 text-muted-foreground">
-            {errorMessage ?? "Checking your session."}
+            {currentUserQuery.isError
+              ? getErrorMessage(
+                  currentUserQuery.error,
+                  "Your session expired. Please sign in again.",
+                )
+              : "Checking your session."}
           </p>
         </div>
       </main>
     );
   }
 
-  return <DashboardShell user={user} />;
+  return <DashboardShell user={currentUserQuery.data} onLogout={handleLogout} />;
 }

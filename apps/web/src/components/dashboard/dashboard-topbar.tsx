@@ -4,24 +4,44 @@ import {
   Bell,
   Clock3,
   Filter,
+  Info,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   Search,
+  Settings2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import type { BoardMember } from "./board-types";
+import { getAvatarFallback } from "./workspace-utils";
 
 type DashboardTopbarProps = {
   boardName: string;
+  boardMembers: BoardMember[];
+  canManageBoard: boolean;
   isSidebarOpen: boolean;
+  onCreateList: () => void;
+  onOpenBoardActivity: () => void;
+  onOpenBoardMembers: () => void;
+  onOpenBoardSettings: () => void;
   onToggleSidebar: () => void;
 };
 
 export function DashboardTopbar({
   boardName,
+  boardMembers,
+  canManageBoard,
   isSidebarOpen,
+  onCreateList,
+  onOpenBoardActivity,
+  onOpenBoardMembers,
+  onOpenBoardSettings,
   onToggleSidebar,
 }: DashboardTopbarProps) {
+  const visibleMembers = boardMembers.slice(0, 3);
+  const remainingMembersCount = Math.max(boardMembers.length - visibleMembers.length, 0);
+
   return (
     <header
       className={cn(
@@ -45,11 +65,42 @@ export function DashboardTopbar({
         <h1 className="truncate text-[19px] font-semibold tracking-[-0.025em] text-[#f5f5f3]">
           {boardName}
         </h1>
+
+        {canManageBoard ? (
+          <button
+            type="button"
+            aria-label="Board settings"
+            onClick={onOpenBoardSettings}
+            className="ui-pressed-button rounded-[10px] border p-2 transition"
+          >
+            <Settings2 className="h-4 w-4" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label="Board details"
+            onClick={onOpenBoardSettings}
+            className="ui-pressed-button rounded-[10px] border p-2 transition"
+          >
+            <Info className="h-4 w-4" />
+          </button>
+        )}
+
+        {canManageBoard ? (
+          <button
+            type="button"
+            aria-label="Create list"
+            onClick={onCreateList}
+            className="ui-pressed-button rounded-[10px] border p-2 transition"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        ) : null}
       </div>
 
       <div className="flex flex-1 items-center justify-center px-2">
         <div className="flex w-full max-w-[420px] items-center gap-2">
-          <label className="flex h-8 flex-1 items-center gap-2 rounded-[10px] border border-white/6 bg-[#141415] px-3 text-[#8f8f8f]">
+          <label className="ui-pressed-active flex h-8 flex-1 items-center gap-2 rounded-[10px] border px-3 text-[#8f8f8f]">
             <Search className="h-4 w-4 shrink-0" />
             <input
               type="text"
@@ -61,7 +112,7 @@ export function DashboardTopbar({
           <button
             type="button"
             aria-label="Filter"
-            className="flex h-8 items-center gap-2 rounded-[10px] border border-white/6 bg-[#141415] px-3 text-[13px] text-[#b3b3b0] transition hover:bg-white/5 hover:text-white"
+            className="ui-pressed-button flex h-8 items-center gap-2 rounded-[10px] border px-3 text-[13px] transition"
           >
             <Filter className="h-4 w-4" />
             <span>Filter</span>
@@ -73,25 +124,36 @@ export function DashboardTopbar({
         <button
           type="button"
           aria-label="Members"
-          className="flex h-8 w-[125px] items-center justify-center rounded-[10px] border border-white/6 bg-[#141415] px-3 text-[#d8d8d5] transition hover:bg-white/5"
+          onClick={onOpenBoardMembers}
+          className="ui-pressed-button flex h-8 min-w-[86px] items-center justify-center rounded-[10px] border px-3 transition"
         >
           <span className="flex -space-x-1.5">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#141415] bg-[#d66c12] text-[9px] font-semibold text-white">
-              H
-            </span>
-            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#141415] bg-[#3a5568] text-[9px] font-semibold text-white">
-              A
-            </span>
-            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#141415] bg-[#5a3d76] text-[9px] font-semibold text-white">
-              N
-            </span>
+            {visibleMembers.length > 0 ? (
+              visibleMembers.map((member) => (
+                <span
+                  key={member.id}
+                  title={member.user.name}
+                  className="flex h-5 w-5 items-center justify-center rounded-full border border-[#141415] bg-[#d66c12] text-[9px] font-semibold text-white"
+                >
+                  {getAvatarFallback(member.user.name)}
+                </span>
+              ))
+            ) : (
+              <span className="px-1 text-[11px] text-[#a5a5a0]">Members</span>
+            )}
+            {remainingMembersCount > 0 ? (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#141415] bg-[#29292b] text-[9px] font-semibold text-white">
+                +{remainingMembersCount}
+              </span>
+            ) : null}
           </span>
         </button>
 
         <button
           type="button"
           aria-label="Activity history"
-          className="rounded-[10px] border border-white/6 bg-[#141415] p-2 text-[#8a8a8a] transition hover:bg-white/5 hover:text-white"
+          onClick={onOpenBoardActivity}
+          className="ui-pressed-button rounded-[10px] border p-2 transition"
         >
           <Clock3 className="h-4 w-4" />
         </button>
@@ -99,7 +161,7 @@ export function DashboardTopbar({
         <button
           type="button"
           aria-label="Notifications"
-          className="rounded-[10px] border border-white/6 bg-[#141415] p-2 text-[#8a8a8a] transition hover:bg-white/5 hover:text-white"
+          className="ui-pressed-button rounded-[10px] border p-2 transition"
         >
           <Bell className="h-4 w-4" />
         </button>

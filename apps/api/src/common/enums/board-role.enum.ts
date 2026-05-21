@@ -1,4 +1,5 @@
 export enum BoardRole {
-  EDITOR = 'EDITOR',
+  MANAGER = 'MANAGER',
+  CONTRIBUTOR = 'CONTRIBUTOR',
   VIEWER = 'VIEWER',
 }

@@ -62,21 +62,29 @@ export class WorkspacesController {
     @Req() req: AuthenticatedRequest,
     @Param('workspaceId') workspaceId: string,
   ) {
-    const workspace = await this.workspacesService.getWorkspaceById(workspaceId);
+    const workspace =
+      await this.workspacesService.getWorkspaceById(workspaceId);
     return {
       ...workspace,
       currentUserRole: req.workspaceRole,
     };
   }
 
+  @Get(':workspaceId/activity')
+  @UseGuards(WorkspaceGuard)
+  async getWorkspaceActivity(@Param('workspaceId') workspaceId: string) {
+    return this.workspacesService.getWorkspaceActivity(workspaceId);
+  }
+
   @Patch(':workspaceId')
   @UseGuards(WorkspaceGuard, RolesGuard)
   @Roles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async updateWorkspace(
+    @Req() req: AuthenticatedRequest,
     @Param('workspaceId') workspaceId: string,
     @Body() dto: UpdateWorkspaceDto,
   ) {
-    return this.workspacesService.updateWorkspace(workspaceId, dto);
+    return this.workspacesService.updateWorkspace(workspaceId, req.user.id, dto);
   }
 
   @Delete(':workspaceId')
@@ -134,10 +142,11 @@ export class WorkspacesController {
   @UseGuards(WorkspaceGuard, RolesGuard)
   @Roles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async removeMember(
+    @Req() req: AuthenticatedRequest,
     @Param('workspaceId') workspaceId: string,
     @Param('userId') userId: string,
   ) {
-    await this.workspacesService.removeMember(workspaceId, userId);
+    await this.workspacesService.removeMember(workspaceId, userId, req.user.id);
   }
 
   @Post(':workspaceId/boards')
@@ -162,32 +171,16 @@ export class WorkspacesController {
   async getBoards(
     @Req() req: AuthenticatedRequest,
     @Param('workspaceId') workspaceId: string,
-    @Query('includeArchived') includeArchived?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
-    const include = includeArchived === 'true';
     const take = limit ? parseInt(limit, 10) : 50;
     const skip = offset ? parseInt(offset, 10) : 0;
-
-    if (
-      include &&
-      req.workspaceRole !== WorkspaceRole.OWNER &&
-      req.workspaceRole !== WorkspaceRole.ADMIN
-    ) {
-      return this.boardsService.findWorkspaceBoards(
-        workspaceId,
-        req.user.id,
-        false,
-        take,
-        skip,
-      );
-    }
 
     return this.boardsService.findWorkspaceBoards(
       workspaceId,
       req.user.id,
-      include,
+      req.workspaceRole as WorkspaceRole,
       take,
       skip,
     );

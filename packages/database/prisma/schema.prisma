@@ -18,7 +18,8 @@ enum WorkspaceRole {
 }
 
 enum BoardRole {
-  EDITOR
+  MANAGER
+  CONTRIBUTOR
   VIEWER
 }
 
@@ -48,6 +49,7 @@ model User {
   comments             Comment[]
   activityLogs         ActivityLog[]
   assignedCards        CardAssignee[]
+  authSessions         AuthSession[]
 }
 
 model EmailOtpVerification {
@@ -61,6 +63,26 @@ model EmailOtpVerification {
   updatedAt  DateTime @updatedAt
 
   @@index([email, createdAt])
+}
+
+model AuthSession {
+  id                      String   @id
+  userId                  String
+  tokenFamily             String
+  currentRefreshTokenHash String
+  ipAddress               String?
+  userAgent               String?
+  lastSeenAt              DateTime @default(now())
+  expiresAt               DateTime
+  revokedAt               DateTime?
+  revokedReason           String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([tokenFamily])
 }
 
 //--------------------
@@ -106,7 +128,6 @@ model Board {
   description String?
   visibility  BoardVisibility
   createdBy   String
-  archived    Boolean         @default(false)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
@@ -125,7 +146,7 @@ model BoardMember {
   role    BoardRole
   addedAt DateTime  @default(now())
 
-  board Board @relation(fields: [boardId], references: [id])
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id])
 
   @@unique([boardId, userId])
@@ -140,11 +161,10 @@ model List {
   boardId   String
   title     String
   position  BigInt
-  archived  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  board Board  @relation(fields: [boardId], references: [id])
+  board Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
   cards Card[]
 }
 
@@ -160,11 +180,10 @@ model Card {
   position    BigInt
   dueDate     DateTime?
   createdBy   String
-  archived    Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  list    List @relation(fields: [listId], references: [id])
+  list    List @relation(fields: [listId], references: [id], onDelete: Cascade)
   creator User @relation(fields: [createdBy], references: [id])
 
   assignees CardAssignee[]
@@ -178,7 +197,7 @@ model CardAssignee {
   userId     String
   assignedAt DateTime @default(now())
 
-  card Card @relation(fields: [cardId], references: [id])
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id])
 
   @@unique([cardId, userId])
@@ -195,7 +214,7 @@ model Label {
   color     String
   createdAt DateTime @default(now())
 
-  board Board @relation(fields: [boardId], references: [id])
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   cards CardLabel[]
 }
@@ -205,8 +224,8 @@ model CardLabel {
   cardId  String
   labelId String
 
-  card  Card  @relation(fields: [cardId], references: [id])
-  label Label @relation(fields: [labelId], references: [id])
+  card  Card  @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
 
   @@unique([cardId, labelId])
 }
@@ -223,7 +242,7 @@ model Comment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  card Card @relation(fields: [cardId], references: [id])
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id])
 }
 

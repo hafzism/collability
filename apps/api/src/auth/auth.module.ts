@@ -18,10 +18,12 @@ import { AuthMailerService } from './auth-mailer.service';
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
         const secret = configService.get<string>('JWT_SECRET');
+        const expiresIn = configService.get<string>('JWT_EXPIRES_IN');
         if (!secret) throw new Error('JWT_SECRET must be set');
+        if (!expiresIn) throw new Error('JWT_EXPIRES_IN must be set');
         return {
           secret,
-          signOptions: { expiresIn: '7d' },
+          signOptions: { expiresIn: expiresIn as any },
         };
       },
       inject: [ConfigService],

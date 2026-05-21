@@ -1,4 +1,10 @@
-import { IsDateString, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsDateString,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreateCardDto {
   @IsString()
@@ -12,4 +18,14 @@ export class CreateCardDto {
   @IsDateString()
   @IsOptional()
   dueDate?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  labelIds?: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  assigneeIds?: string[];
 }

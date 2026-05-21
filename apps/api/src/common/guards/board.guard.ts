@@ -1,4 +1,11 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { BoardsService } from '../../boards/boards.service';
 import { WorkspacesService } from '../../workspaces/workspaces.service';
@@ -41,45 +48,61 @@ export class BoardGuard implements CanActivate {
 
     let workspaceRole = request.workspaceRole;
     if (!workspaceRole) {
-      workspaceRole = await this.workspacesService.getWorkspaceRole(user.id, board.workspaceId) as WorkspaceRole | undefined;
+      workspaceRole = (await this.workspacesService.getWorkspaceRole(
+        user.id,
+        board.workspaceId,
+      )) as WorkspaceRole | undefined;
     }
 
     if (!workspaceRole) {
-      this.logger.warn(`User ${user.id} denied access to Board ${boardId}: Not a workspace member`);
-      throw new ForbiddenException('You must be a member of the workspace to access this board');
+      this.logger.warn(
+        `User ${user.id} denied access to Board ${boardId}: Not a workspace member`,
+      );
+      throw new ForbiddenException(
+        'You must be a member of the workspace to access this board',
+      );
     }
 
-    if (board.archived) {
-      if (workspaceRole !== WorkspaceRole.OWNER && workspaceRole !== WorkspaceRole.ADMIN) {
-        this.logger.warn(`User ${user.id} denied access to archived Board ${boardId}`);
-        throw new ForbiddenException('This board is archived and can only be accessed by workspace admins');
-      }
-    }
-
-    const boardMember = await this.boardsService.getBoardMembership(user.id, boardId);
+    const boardMember = await this.boardsService.getBoardMembership(
+      user.id,
+      boardId,
+    );
     let boardRole: BoardRole;
 
-    if (boardMember) {
+    if (board.createdBy === user.id) {
+      boardRole = BoardRole.MANAGER;
+    } else if (boardMember) {
       boardRole = boardMember.role as BoardRole;
     } else {
       if (board.visibility === 'PRIVATE') {
-        this.logger.warn(`User ${user.id} denied access to private Board ${boardId}`);
-        throw new ForbiddenException('You do not have access to this private board');
+        if (
+          workspaceRole !== WorkspaceRole.OWNER &&
+          workspaceRole !== WorkspaceRole.ADMIN
+        ) {
+          this.logger.warn(
+            `User ${user.id} denied access to private Board ${boardId}`,
+          );
+          throw new ForbiddenException(
+            'You do not have access to this private board',
+          );
+        }
       }
-      
-      boardRole = (workspaceRole === WorkspaceRole.OWNER || workspaceRole === WorkspaceRole.ADMIN)
-        ? BoardRole.EDITOR
-        : BoardRole.VIEWER;
+
+      boardRole = BoardRole.VIEWER;
     }
 
-    const requiredRole = this.reflector.getAllAndOverride<BoardRole>(REQUIRE_BOARD_ROLE_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredRoles = this.reflector.getAllAndOverride<BoardRole[]>(
+      REQUIRE_BOARD_ROLE_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
-    if (requiredRole && requiredRole === BoardRole.EDITOR && boardRole !== BoardRole.EDITOR) {
-      this.logger.warn(`User ${user.id} denied modifying Board ${boardId}: Requires EDITOR role`);
-      throw new ForbiddenException('You must be a board editor to perform this action');
+    if (requiredRoles?.length && !requiredRoles.includes(boardRole)) {
+      this.logger.warn(
+        `User ${user.id} denied modifying Board ${boardId}: Requires ${requiredRoles.join(', ')} role`,
+      );
+      throw new ForbiddenException(
+        'You do not have the required board role to perform this action',
+      );
     }
 
     request.boardId = board.id;

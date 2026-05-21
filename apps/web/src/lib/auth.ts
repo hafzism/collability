@@ -1,6 +1,8 @@
-import axios, { AxiosError } from "axios";
+import { apiRequest } from "./api-client";
+import { REFRESH_TOKEN_COOKIE_NAME } from "./auth-constants";
+import { clearAccessToken, setAccessToken } from "./auth-session";
 
-export const AUTH_COOKIE_NAME = "collability_auth";
+export { REFRESH_TOKEN_COOKIE_NAME };
 
 export type AuthUser = {
   id: string;
@@ -8,52 +10,20 @@ export type AuthUser = {
   name: string;
 };
 
-type ApiErrorResponse = {
-  message?: string | string[];
+export type AuthSession = {
+  id: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  lastSeenAt: string;
+  expiresAt: string;
+  createdAt: string;
+  isCurrent: boolean;
 };
 
-function getApiBaseUrl() {
-  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-}
-
-function normalizeApiErrorMessage(message: ApiErrorResponse["message"]) {
-  if (Array.isArray(message)) {
-    return message[0] ?? "Something went wrong. Please try again.";
-  }
-
-  return message ?? "Something went wrong. Please try again.";
-}
-
-const apiClient = axios.create({
-  baseURL: getApiBaseUrl(),
-  withCredentials: true,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
-
-async function apiRequest<T>(
-  path: string,
-  init: {
-    body?: unknown;
-    method: "GET" | "POST";
-  },
-): Promise<T> {
-  try {
-    const response = await apiClient.request<T>({
-      url: path,
-      method: init.method,
-      data: init.body,
-    });
-
-    return response.data;
-  } catch (error) {
-    const axiosError = error as AxiosError<ApiErrorResponse>;
-    throw new Error(
-      normalizeApiErrorMessage(axiosError.response?.data?.message),
-    );
-  }
-}
+type AuthResponse = {
+  accessToken: string;
+  user: AuthUser;
+};
 
 export function getErrorMessage(
   error: unknown,
@@ -70,6 +40,7 @@ export function requestOtp(email: string) {
   return apiRequest<{ message: string }>("/auth/request-otp", {
     method: "POST",
     body: { email },
+    skipAuthRetry: true,
   });
 }
 
@@ -77,6 +48,7 @@ export function verifyOtp(email: string, code: string) {
   return apiRequest<{ verificationToken: string }>("/auth/verify-otp", {
     method: "POST",
     body: { email, code },
+    skipAuthRetry: true,
   });
 }
 
@@ -86,21 +58,58 @@ export function register(input: {
   password: string;
   verificationToken: string;
 }) {
-  return apiRequest<{ user: AuthUser }>("/auth/register", {
+  return apiRequest<AuthResponse>("/auth/register", {
     method: "POST",
     body: input,
+    skipAuthRetry: true,
+  }).then((result) => {
+    setAccessToken(result.accessToken);
+    return result;
   });
 }
 
 export function login(input: { email: string; password: string }) {
-  return apiRequest<{ user: AuthUser }>("/auth/login", {
+  return apiRequest<AuthResponse>("/auth/login", {
     method: "POST",
     body: input,
+    skipAuthRetry: true,
+  }).then((result) => {
+    setAccessToken(result.accessToken);
+    return result;
   });
 }
 
 export function getCurrentUser() {
   return apiRequest<AuthUser>("/auth/me", {
     method: "GET",
+  });
+}
+
+export async function logout() {
+  try {
+    return await apiRequest<{ message: string }>("/auth/logout", {
+      method: "POST",
+      skipAuthRetry: true,
+    });
+  } finally {
+    clearAccessToken();
+  }
+}
+
+export function listSessions() {
+  return apiRequest<AuthSession[]>("/auth/sessions", {
+    method: "GET",
+  });
+}
+
+export function logoutOtherDevices() {
+  return apiRequest<{ message: string }>("/auth/logout-others", {
+    method: "POST",
+  });
+}
+
+export function logoutDeviceSession(sessionId: string) {
+  return apiRequest<{ message: string }>(`/auth/sessions/${sessionId}`, {
+    method: "DELETE",
   });
 }

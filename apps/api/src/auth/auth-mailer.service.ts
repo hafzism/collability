@@ -53,13 +53,14 @@ export class AuthMailerService {
     }
 
     const host = this.configService.get<string>('SMTP_HOST');
-    const port = Number(this.configService.get<string>('SMTP_PORT') ?? 587);
+    const portValue = this.configService.get<string>('SMTP_PORT');
     const user = this.configService.get<string>('SMTP_USER');
     const pass = this.configService.get<string>('SMTP_PASS');
 
-    if (!host || !user || !pass) {
-      throw new Error('SMTP_HOST, SMTP_USER, and SMTP_PASS must be set');
+    if (!host || !portValue || !user || !pass) {
+      throw new Error('SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS must be set');
     }
+    const port = Number(portValue);
 
     this.transporter = nodemailer.createTransport({
       host,
@@ -75,7 +76,11 @@ export class AuthMailerService {
   }
 
   private getOtpExpiresMinutes() {
-    return Number(this.configService.get<string>('OTP_EXPIRES_MINUTES') ?? 10);
+    const value = this.configService.get<string>('OTP_EXPIRES_MINUTES');
+    if (!value) {
+      throw new Error('OTP_EXPIRES_MINUTES must be set');
+    }
+    return Number(value);
   }
 
   private buildSignupOtpTemplate(otpCode: string) {

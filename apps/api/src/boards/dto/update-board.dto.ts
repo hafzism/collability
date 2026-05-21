@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
 
 enum BoardVisibility {
   WORKSPACE = 'WORKSPACE',
@@ -17,8 +17,4 @@ export class UpdateBoardDto {
   @IsEnum(BoardVisibility)
   @IsOptional()
   visibility?: 'WORKSPACE' | 'PRIVATE';
-
-  @IsBoolean()
-  @IsOptional()
-  archived?: boolean;
 }

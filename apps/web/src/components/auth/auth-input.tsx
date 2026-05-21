@@ -32,7 +32,7 @@ export function AuthInput({
         aria-invalid={Boolean(error)}
         aria-describedby={descriptionId}
         className={cn(
-          "h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-[15px] text-white outline-none transition-all placeholder:text-muted-foreground/90 focus:border-white/20 focus:ring-1 focus:ring-white/20",
+          "ui-pressed-active h-12 w-full rounded-xl border px-4 text-[15px] text-white outline-none transition-all placeholder:text-muted-foreground/90",
           error &&
             "border-destructive/70 focus:border-destructive/80 focus:ring-destructive/40",
           className,

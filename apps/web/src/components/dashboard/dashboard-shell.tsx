@@ -1,393 +1,292 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-
-import { getErrorMessage, type AuthUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import {
-  createWorkspace,
-  deleteWorkspace,
-  getWorkspace,
-  inviteWorkspaceMember,
-  joinWorkspace,
-  leaveWorkspace,
-  listWorkspaces,
-  removeWorkspaceMember,
-  updateWorkspace,
-  updateWorkspaceMemberRole,
-} from "@/lib/workspaces";
+import { type AuthUser } from "@/lib/auth";
 
+import { AccountSettingsModal } from "./account-settings-modal";
+import { BoardActivityModal } from "./board-activity-modal";
+import { BoardMembersModal } from "./board-members-modal";
+import { BoardSettingsModal } from "./board-settings-modal";
+import { CardDetailModal } from "./card-detail-modal";
+import { CreateBoardModal } from "./create-board-modal";
 import { CreateWorkspaceModal } from "./create-workspace-modal";
 import { DashboardKanban } from "./dashboard-kanban";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardTopbar } from "./dashboard-topbar";
-import { boardItems } from "./dashboard-types";
 import { JoinWorkspaceModal } from "./join-workspace-modal";
+import { useDashboardShell } from "./use-dashboard-shell";
 import { WorkspaceDetailsModal } from "./workspace-details-modal";
-import type {
-  WorkspaceActivityItem,
-  WorkspaceDetail,
-  WorkspaceInviteResponse,
-  WorkspaceSummary,
-} from "./workspace-types";
 
-const initialWorkspaces: WorkspaceSummary[] = [];
-const initialWorkspaceActivity: Record<string, WorkspaceActivityItem[]> = {};
-
-export function DashboardShell({ user }: { user: AuthUser }) {
-  const [activeBoardId, setActiveBoardId] = useState(boardItems[0]?.id ?? "");
-  const [workspaces, setWorkspaces] =
-    useState<WorkspaceSummary[]>(initialWorkspaces);
-  const [workspaceActivityById, setWorkspaceActivityById] = useState<
-    Record<string, WorkspaceActivityItem[]>
-  >(initialWorkspaceActivity);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(
-    initialWorkspaces[0]?.id ?? "",
-  );
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
-  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
-  const [isCreateWorkspaceModalOpen, setIsCreateWorkspaceModalOpen] =
-    useState(false);
-  const [isJoinWorkspaceModalOpen, setIsJoinWorkspaceModalOpen] =
-    useState(false);
-  const [workspaceDetailsWorkspaceId, setWorkspaceDetailsWorkspaceId] =
-    useState<string | null>(null);
-  const [workspaceDetails, setWorkspaceDetails] =
-    useState<WorkspaceDetail | null>(null);
-  const [workspaceErrorMessage, setWorkspaceErrorMessage] = useState<
-    string | null
-  >(null);
-
-  const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
-  const accountMenuRef = useRef<HTMLDivElement | null>(null);
-
-  const activeBoard =
-    boardItems.find((item) => item.id === activeBoardId) ?? boardItems[0];
-  const activeWorkspace =
-    workspaces.find((item) => item.id === activeWorkspaceId) ?? null;
-  const userInitials = user.name.trim().slice(0, 2).toUpperCase() || "U";
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadWorkspaces() {
-      try {
-        const loadedWorkspaces = await listWorkspaces();
-        if (!isMounted) {
-          return;
-        }
-
-        setWorkspaces(loadedWorkspaces);
-        setActiveWorkspaceId((currentActiveWorkspaceId) => {
-          if (
-            currentActiveWorkspaceId &&
-            loadedWorkspaces.some(
-              (workspace) => workspace.id === currentActiveWorkspaceId,
-            )
-          ) {
-            return currentActiveWorkspaceId;
-          }
-
-          return loadedWorkspaces[0]?.id ?? "";
-        });
-        setWorkspaceErrorMessage(null);
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        setWorkspaceErrorMessage(
-          getErrorMessage(error, "Unable to load your workspaces."),
-        );
-      }
-    }
-
-    void loadWorkspaces();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadWorkspaceDetails() {
-      if (!workspaceDetailsWorkspaceId) {
-        setWorkspaceDetails(null);
-        return;
-      }
-
-      try {
-        const detail = await getWorkspace(workspaceDetailsWorkspaceId);
-        if (!isMounted) {
-          return;
-        }
-
-        setWorkspaceDetails(detail);
-      } catch {
-        if (!isMounted) {
-          return;
-        }
-
-        setWorkspaceDetails(null);
-      }
-    }
-
-    void loadWorkspaceDetails();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [workspaceDetailsWorkspaceId]);
-
-  useEffect(() => {
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-
-      if (
-        isWorkspaceMenuOpen &&
-        workspaceMenuRef.current &&
-        !workspaceMenuRef.current.contains(target)
-      ) {
-        setIsWorkspaceMenuOpen(false);
-      }
-
-      if (
-        isAccountMenuOpen &&
-        accountMenuRef.current &&
-        !accountMenuRef.current.contains(target)
-      ) {
-        setIsAccountMenuOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-    };
-  }, [isAccountMenuOpen, isWorkspaceMenuOpen]);
-
-  async function refreshWorkspaceDetails(workspaceId: string) {
-    const refreshedWorkspace = await getWorkspace(workspaceId);
-    setWorkspaceDetails(refreshedWorkspace);
-  }
-
-  async function handleCreateWorkspace(values: { name: string }) {
-    const workspace = await createWorkspace(values);
-
-    setWorkspaces((current) => [...current, workspace]);
-    setWorkspaceActivityById((current) => ({
-      ...current,
-      [workspace.id]: [],
-    }));
-    setActiveWorkspaceId(workspace.id);
-    setIsCreateWorkspaceModalOpen(false);
-    setIsWorkspaceMenuOpen(false);
-  }
-
-  async function handleJoinWorkspace(values: { code: string }) {
-    const workspace = await joinWorkspace(values);
-
-    setWorkspaces((current) => {
-      if (current.some((item) => item.id === workspace.id)) {
-        return current.map((item) => (item.id === workspace.id ? workspace : item));
-      }
-
-      return [...current, workspace];
-    });
-    setActiveWorkspaceId(workspace.id);
-    setIsJoinWorkspaceModalOpen(false);
-  }
-
-  async function handleUpdateWorkspace(
-    workspaceId: string,
-    updates: Pick<WorkspaceSummary, "name">,
-  ) {
-    const updatedWorkspace = await updateWorkspace(workspaceId, updates);
-
-    setWorkspaces((current) =>
-      current.map((workspace) =>
-        workspace.id === workspaceId
-          ? { ...workspace, ...updatedWorkspace }
-          : workspace,
-      ),
-    );
-
-    setWorkspaceDetails((current) =>
-      current && current.id === workspaceId
-        ? { ...current, ...updatedWorkspace }
-        : current,
-    );
-  }
-
-  async function handleDeleteWorkspace(workspaceId: string) {
-    await deleteWorkspace(workspaceId);
-
-    setWorkspaces((current) => {
-      const remaining = current.filter(
-        (workspace) => workspace.id !== workspaceId,
-      );
-
-      setActiveWorkspaceId((previous) => {
-        if (previous !== workspaceId) {
-          return previous;
-        }
-
-        return remaining[0]?.id ?? "";
-      });
-
-      return remaining;
-    });
-
-    setWorkspaceActivityById((current) => {
-      const next = { ...current };
-      delete next[workspaceId];
-      return next;
-    });
-
-    setWorkspaceDetailsWorkspaceId(null);
-    setWorkspaceDetails(null);
-    setIsWorkspaceMenuOpen(false);
-  }
-
-  async function handleInviteWorkspaceMember(input: {
-    workspaceId: string;
-    email: string;
-  }): Promise<WorkspaceInviteResponse> {
-    return inviteWorkspaceMember(input);
-  }
-
-  async function handleUpdateWorkspaceMemberRole(input: {
-    workspaceId: string;
-    userId: string;
-    role: "ADMIN" | "MEMBER" | "GUEST";
-  }) {
-    await updateWorkspaceMemberRole(input);
-    await refreshWorkspaceDetails(input.workspaceId);
-  }
-
-  async function handleRemoveWorkspaceMember(input: {
-    workspaceId: string;
-    userId: string;
-  }) {
-    await removeWorkspaceMember(input);
-    await refreshWorkspaceDetails(input.workspaceId);
-  }
-
-  async function handleLeaveWorkspace(workspaceId: string) {
-    await leaveWorkspace(workspaceId);
-
-    setWorkspaces((current) => {
-      const remaining = current.filter((workspace) => workspace.id !== workspaceId);
-
-      setActiveWorkspaceId((previous) => {
-        if (previous !== workspaceId) {
-          return previous;
-        }
-
-        return remaining[0]?.id ?? "";
-      });
-
-      return remaining;
-    });
-
-    setWorkspaceDetailsWorkspaceId(null);
-    setWorkspaceDetails(null);
-  }
+export function DashboardShell({
+  user,
+  onLogout,
+}: {
+  user: AuthUser;
+  onLogout: () => void;
+}) {
+  const dashboard = useDashboardShell(user);
+  const cardDetailModalState = dashboard.cardDetailModalState;
 
   return (
     <div className="h-screen overflow-hidden bg-[#050505] text-[#f3f3f1]">
       <div className="flex h-full">
         <DashboardSidebar
-          accountMenuRef={accountMenuRef}
-          activeBoard={activeBoard}
-          activeWorkspace={activeWorkspace}
-          boardItems={boardItems}
-          isAccountMenuOpen={isAccountMenuOpen}
-          isSidebarOpen={isSidebarOpen}
-          isWorkspaceMenuOpen={isWorkspaceMenuOpen}
+          accountMenuRef={dashboard.accountMenuRef}
+          activeBoard={dashboard.activeBoard}
+          activeWorkspace={dashboard.activeWorkspace}
+          boardItems={dashboard.activeBoards}
+          isAccountMenuOpen={dashboard.isAccountMenuOpen}
+          isBoardCreationDisabled={!dashboard.activeWorkspace}
+          isSidebarOpen={dashboard.isSidebarOpen}
+          isWorkspaceMenuOpen={dashboard.isWorkspaceMenuOpen}
           onAccountMenuToggle={() =>
-            setIsAccountMenuOpen((currentState) => !currentState)
+            dashboard.setIsAccountMenuOpen((currentState) => !currentState)
           }
-          onBoardSelect={setActiveBoardId}
-          onCreateWorkspace={() => setIsCreateWorkspaceModalOpen(true)}
-          onJoinWorkspace={() => setIsJoinWorkspaceModalOpen(true)}
+          onBoardSelect={dashboard.setActiveBoardId}
+          onCreateBoard={() => dashboard.setIsCreateBoardModalOpen(true)}
+          onCreateWorkspace={() => dashboard.setIsCreateWorkspaceModalOpen(true)}
+          onJoinWorkspace={() => dashboard.setIsJoinWorkspaceModalOpen(true)}
+          onOpenSettings={() => {
+            dashboard.setIsAccountMenuOpen(false);
+            dashboard.setIsAccountSettingsModalOpen(true);
+          }}
+          onLogout={onLogout}
           onOpenWorkspaceDetails={(workspaceId) => {
-            setWorkspaceDetailsWorkspaceId(workspaceId);
-            setIsWorkspaceMenuOpen(false);
+            dashboard.setWorkspaceDetailsWorkspaceId(workspaceId);
+            dashboard.setIsWorkspaceMenuOpen(false);
           }}
           onWorkspaceMenuToggle={() =>
-            setIsWorkspaceMenuOpen((currentState) => !currentState)
+            dashboard.setIsWorkspaceMenuOpen((currentState) => !currentState)
           }
           onWorkspaceSelect={(workspaceId) => {
-            setActiveWorkspaceId(workspaceId);
-            setIsWorkspaceMenuOpen(false);
+            dashboard.setActiveWorkspaceId(workspaceId);
+            dashboard.setIsWorkspaceMenuOpen(false);
           }}
-          userInitials={userInitials}
+          userInitials={dashboard.userInitials}
           userName={user.name}
-          workspaceItems={workspaces}
-          workspaceMenuRef={workspaceMenuRef}
+          workspaceItems={dashboard.workspaces}
+          workspaceMenuRef={dashboard.workspaceMenuRef}
         />
 
         <section
           className={cn(
             "flex min-h-0 min-w-0 flex-1 bg-[#050505]",
-            isSidebarOpen ? "p-0" : "p-0",
+            dashboard.isSidebarOpen ? "p-0" : "p-0",
           )}
         >
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#0f0f10] transition-colors duration-200">
             <DashboardTopbar
-              boardName={activeBoard.name}
-              isSidebarOpen={isSidebarOpen}
+              boardName={dashboard.activeBoard?.title ?? "Boards"}
+              boardMembers={dashboard.activeBoardDetail?.members ?? []}
+              canManageBoard={
+                dashboard.activeBoardDetail?.currentUserBoardRole === "MANAGER"
+              }
+              isSidebarOpen={dashboard.isSidebarOpen}
+              onCreateList={() => {
+                if (
+                  !dashboard.activeBoard ||
+                  dashboard.activeBoardDetail?.currentUserBoardRole !== "MANAGER"
+                ) {
+                  return;
+                }
+
+                dashboard.setCreateListRequestId((current) => current + 1);
+              }}
+              onOpenBoardActivity={() => {
+                if (!dashboard.activeBoard) {
+                  return;
+                }
+
+                void dashboard.refreshBoardActivity(dashboard.activeBoard.id);
+                dashboard.setIsBoardActivityModalOpen(true);
+              }}
+              onOpenBoardMembers={() => {
+                dashboard.setIsBoardMembersModalOpen(true);
+              }}
+              onOpenBoardSettings={() => {
+                dashboard.setIsBoardSettingsModalOpen(true);
+              }}
               onToggleSidebar={() =>
-                setIsSidebarOpen((currentState) => !currentState)
+                dashboard.setIsSidebarOpen((currentState) => !currentState)
               }
             />
 
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-              {workspaceErrorMessage ? (
+              {dashboard.workspaceErrorMessage ? (
                 <div className="border-b border-[#4c1f1a] bg-[#2a120f] px-6 py-3 text-sm text-[#f2cbc3]">
-                  {workspaceErrorMessage}
+                  {dashboard.workspaceErrorMessage}
                 </div>
               ) : null}
-              <DashboardKanban activeBoardId={activeBoard.id} />
+              <DashboardKanban
+                activeBoardId={dashboard.activeBoard?.id ?? ""}
+                boardLabels={dashboard.activeBoardDetail?.labels ?? []}
+                boardMembers={dashboard.activeBoardDetail?.members ?? []}
+                canManageCards={
+                  dashboard.activeBoardDetail?.currentUserBoardRole === "MANAGER" ||
+                  dashboard.activeBoardDetail?.currentUserBoardRole === "CONTRIBUTOR"
+                }
+                canManageLists={
+                  dashboard.activeBoardDetail?.currentUserBoardRole === "MANAGER"
+                }
+                cardsByListId={dashboard.cardsByListId}
+                createListRequestId={dashboard.createListRequestId}
+                lists={dashboard.activeBoardLists}
+                onDeleteList={dashboard.handleDeleteList}
+                onCreateBoardLabel={dashboard.handleCreateBoardLabel}
+                onCreateCard={dashboard.handleCreateCard}
+                onCreateList={dashboard.handleCreateList}
+                onMoveCard={dashboard.handleMoveCard}
+                onOpenCardComments={(input) =>
+                  void dashboard.handleOpenCardDetail({
+                    ...input,
+                    initialTab: "comments",
+                  })
+                }
+                onOpenCardDetails={(input) =>
+                  void dashboard.handleOpenCardDetail({
+                    ...input,
+                    initialTab: "details",
+                  })
+                }
+                onReorderList={dashboard.handleReorderList}
+                onRenameList={dashboard.handleRenameList}
+              />
             </div>
           </div>
         </section>
       </div>
 
-      {isCreateWorkspaceModalOpen ? (
+      {dashboard.isCreateWorkspaceModalOpen ? (
         <CreateWorkspaceModal
-          onClose={() => setIsCreateWorkspaceModalOpen(false)}
-          onSubmit={handleCreateWorkspace}
+          onClose={() => dashboard.setIsCreateWorkspaceModalOpen(false)}
+          onSubmit={dashboard.handleCreateWorkspace}
         />
       ) : null}
 
-      {isJoinWorkspaceModalOpen ? (
+      {dashboard.isCreateBoardModalOpen && dashboard.activeWorkspace ? (
+        <CreateBoardModal
+          currentUserId={user.id}
+          onClose={() => dashboard.setIsCreateBoardModalOpen(false)}
+          onCreateBoard={dashboard.handleCreateBoard}
+          onSubmitMembers={dashboard.handleSubmitBoardMembers}
+          workspaceMembers={dashboard.boardCreationWorkspaceDetail?.members ?? []}
+          workspaceName={dashboard.activeWorkspace.name}
+        />
+      ) : null}
+
+      {dashboard.isBoardSettingsModalOpen && dashboard.activeBoardDetail ? (
+        <BoardSettingsModal
+          board={dashboard.activeBoardDetail}
+          canManageBoard={
+            dashboard.activeBoardDetail.currentUserBoardRole === "MANAGER"
+          }
+          onClose={() => dashboard.setIsBoardSettingsModalOpen(false)}
+          onDeleteBoard={dashboard.handleDeleteBoard}
+          onUpdateBoard={dashboard.handleUpdateBoard}
+        />
+      ) : null}
+
+      {dashboard.isBoardMembersModalOpen &&
+      dashboard.activeBoardDetail &&
+      dashboard.boardManagementWorkspaceDetail ? (
+        <BoardMembersModal
+          board={dashboard.activeBoardDetail}
+          currentUserId={user.id}
+          onAddMember={dashboard.handleAddBoardMember}
+          onClose={() => dashboard.setIsBoardMembersModalOpen(false)}
+          onRemoveMember={dashboard.handleRemoveBoardMember}
+          onUpdateMemberRole={dashboard.handleUpdateBoardMemberRole}
+          workspaceMembers={dashboard.boardManagementWorkspaceDetail.members}
+        />
+      ) : null}
+
+      {dashboard.isBoardActivityModalOpen && dashboard.activeBoard ? (
+        <BoardActivityModal
+          activityItems={dashboard.boardActivityById[dashboard.activeBoard.id] ?? []}
+          boardName={dashboard.activeBoard.title}
+          onClose={() => dashboard.setIsBoardActivityModalOpen(false)}
+        />
+      ) : null}
+
+      {cardDetailModalState &&
+      dashboard.cardDetailsById[cardDetailModalState.cardId] ? (
+        <CardDetailModal
+          activityItems={dashboard.cardActivityById[cardDetailModalState.cardId] ?? []}
+          boardLabels={dashboard.activeBoardDetail?.labels ?? []}
+          boardMembers={dashboard.activeBoardDetail?.members ?? []}
+          canDeleteCard={
+            dashboard.activeBoardDetail?.currentUserBoardRole === "MANAGER"
+          }
+          canEditCard={
+            dashboard.activeBoardDetail?.currentUserBoardRole === "MANAGER" ||
+            dashboard.activeBoardDetail?.currentUserBoardRole === "CONTRIBUTOR"
+          }
+          card={dashboard.cardDetailsById[cardDetailModalState.cardId]!}
+          initialTab={cardDetailModalState.initialTab}
+          onDeleteCard={() =>
+            dashboard.handleDeleteCard({
+              boardId: cardDetailModalState.boardId,
+              listId: cardDetailModalState.listId,
+              cardId: cardDetailModalState.cardId,
+            })
+          }
+          onClose={() => dashboard.setCardDetailModalState(null)}
+          onCreateComment={(input) =>
+            dashboard.handleCreateCardComment({
+              boardId: cardDetailModalState.boardId,
+              listId: cardDetailModalState.listId,
+              cardId: input.cardId,
+              content: input.content,
+            })
+          }
+          onUpdateCard={(input) =>
+            dashboard.handleUpdateCard({
+              boardId: cardDetailModalState.boardId,
+              listId: cardDetailModalState.listId,
+              cardId: input.cardId,
+              title: input.title,
+              description: input.description,
+              dueDate: input.dueDate,
+              labelIds: input.labelIds,
+              assigneeIds: input.assigneeIds,
+            })
+          }
+        />
+      ) : null}
+
+      {dashboard.isJoinWorkspaceModalOpen ? (
         <JoinWorkspaceModal
-          onClose={() => setIsJoinWorkspaceModalOpen(false)}
-          onSubmit={handleJoinWorkspace}
+          onClose={() => dashboard.setIsJoinWorkspaceModalOpen(false)}
+          onSubmit={dashboard.handleJoinWorkspace}
         />
       ) : null}
 
-      {workspaceDetails ? (
+      {dashboard.workspaceDetails ? (
         <WorkspaceDetailsModal
-          key={workspaceDetails.id}
+          key={dashboard.workspaceDetails.id}
           activityItems={
-            workspaceActivityById[workspaceDetails.id] ?? []
+            dashboard.workspaceActivityById[dashboard.workspaceDetails.id] ?? []
           }
           currentUserId={user.id}
-          onClose={() => setWorkspaceDetailsWorkspaceId(null)}
-          onDeleteWorkspace={handleDeleteWorkspace}
-          onInviteMember={handleInviteWorkspaceMember}
-          onLeaveWorkspace={handleLeaveWorkspace}
-          onRemoveMember={handleRemoveWorkspaceMember}
-          onUpdateMemberRole={handleUpdateWorkspaceMemberRole}
-          onUpdateWorkspace={handleUpdateWorkspace}
-          workspace={workspaceDetails}
+          onClose={() => dashboard.setWorkspaceDetailsWorkspaceId(null)}
+          onDeleteWorkspace={dashboard.handleDeleteWorkspace}
+          onInviteMember={dashboard.handleInviteWorkspaceMember}
+          onLeaveWorkspace={dashboard.handleLeaveWorkspace}
+          onRemoveMember={dashboard.handleRemoveWorkspaceMember}
+          onUpdateMemberRole={dashboard.handleUpdateWorkspaceMemberRole}
+          onUpdateWorkspace={dashboard.handleUpdateWorkspace}
+          workspace={dashboard.workspaceDetails}
+        />
+      ) : null}
+
+      {dashboard.isAccountSettingsModalOpen ? (
+        <AccountSettingsModal
+          errorMessage={dashboard.accountSessionsErrorMessage}
+          isLoading={dashboard.accountSessionsStatus === "pending"}
+          onClose={() => dashboard.setIsAccountSettingsModalOpen(false)}
+          onLogoutDevice={dashboard.handleLogoutDeviceSession}
+          onLogoutOtherDevices={dashboard.handleLogoutOtherDevices}
+          sessions={dashboard.accountSessions}
         />
       ) : null}
     </div>

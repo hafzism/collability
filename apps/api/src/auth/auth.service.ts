@@ -2,7 +2,7 @@ import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/co
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { randomInt } from 'crypto';
+import { randomInt, randomUUID } from 'crypto';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -12,6 +12,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { AuthMailerService } from './auth-mailer.service';
+import { User } from '@repo/database';
+
+type SessionContext = {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+};
+
+type RefreshTokenPayload = {
+  sub?: string;
+  sid?: string;
+  family?: string;
+  type?: string;
+};
 
 @Injectable()
 export class AuthService {
@@ -23,7 +36,7 @@ export class AuthService {
     private readonly authMailerService: AuthMailerService,
   ) {}
 
-  async register(registerDto: RegisterDto) {
+  async register(registerDto: RegisterDto, sessionContext: SessionContext = {}) {
     const verifiedEmail = await this.validateVerificationToken(registerDto);
     if (verifiedEmail !== registerDto.email) {
       throw new UnauthorizedException('Verification token does not match email');
@@ -43,14 +56,7 @@ export class AuthService {
       passwordHash,
     });
 
-    const userEntity = plainToInstance(UserEntity, user);
-    const payload = { email: userEntity.email, sub: userEntity.id };
-    const accessToken = this.jwtService.sign(payload);
-
-    return {
-      accessToken,
-      user: userEntity,
-    };
+    return this.createAuthenticatedSession(user, sessionContext);
   }
 
   async requestOtp(requestOtpDto: RequestOtpDto) {
@@ -153,14 +159,186 @@ export class AuthService {
     return plainToInstance(UserEntity, user);
   }
 
-  async login(loginDto: LoginDto) {
+  async login(loginDto: LoginDto, sessionContext: SessionContext = {}) {
     const user = await this.validateUser(loginDto.email, loginDto.password);
+    return this.createAuthenticatedSession(user, sessionContext);
+  }
 
-    const payload = { email: user.email, sub: user.id };
-    const accessToken = this.jwtService.sign(payload);
+  async refreshSession(refreshToken: string, sessionContext: SessionContext = {}) {
+    const payload = this.verifyRefreshToken(refreshToken);
+
+    if (!payload.sub || !payload.sid || !payload.family) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const session = await this.prisma.authSession.findUnique({
+      where: { id: payload.sid },
+    });
+
+    if (
+      !session ||
+      session.userId !== payload.sub ||
+      session.tokenFamily !== payload.family ||
+      session.revokedAt ||
+      session.expiresAt.getTime() <= Date.now()
+    ) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const isCurrentToken = await bcrypt.compare(refreshToken, session.currentRefreshTokenHash);
+    if (!isCurrentToken) {
+      await this.revokeTokenFamily(payload.family, 'token_reuse_detected');
+      throw new UnauthorizedException('Refresh token reuse detected');
+    }
+
+    const user = await this.usersService.findById(payload.sub);
+    if (!user) {
+      await this.prisma.authSession.updateMany({
+        where: {
+          id: session.id,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: new Date(),
+          revokedReason: 'user_not_found',
+        },
+      });
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const userEntity = plainToInstance(UserEntity, user);
+    const accessToken = this.signAccessToken(userEntity, session.id);
+    const nextRefreshToken = this.signRefreshToken({
+      sub: userEntity.id,
+      sid: session.id,
+      family: session.tokenFamily,
+      type: 'refresh',
+    });
+
+    await this.prisma.authSession.update({
+      where: { id: session.id },
+      data: {
+        currentRefreshTokenHash: await this.hashToken(nextRefreshToken),
+        ipAddress: sessionContext.ipAddress ?? undefined,
+        userAgent: sessionContext.userAgent ?? undefined,
+        lastSeenAt: new Date(),
+        expiresAt: this.getRefreshTokenExpiresAt(),
+      },
+    });
+
     return {
       accessToken,
-      user,
+      refreshToken: nextRefreshToken,
+      user: userEntity,
+    };
+  }
+
+  async logoutSession(refreshToken?: string | null) {
+    if (!refreshToken) {
+      return {
+        message: 'Logged out successfully',
+      };
+    }
+
+    try {
+      const payload = this.verifyRefreshToken(refreshToken);
+      if (payload.sid) {
+        await this.prisma.authSession.updateMany({
+          where: {
+            id: payload.sid,
+            revokedAt: null,
+          },
+          data: {
+            revokedAt: new Date(),
+            revokedReason: 'logout',
+          },
+        });
+      }
+    } catch {
+      return {
+        message: 'Logged out successfully',
+      };
+    }
+
+    return {
+      message: 'Logged out successfully',
+    };
+  }
+
+  async listSessions(userId: string, currentSessionId?: string) {
+    const sessions = await this.prisma.authSession.findMany({
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      orderBy: {
+        lastSeenAt: 'desc',
+      },
+    });
+
+    return sessions.map((session) => ({
+      id: session.id,
+      ipAddress: session.ipAddress,
+      userAgent: session.userAgent,
+      lastSeenAt: session.lastSeenAt,
+      expiresAt: session.expiresAt,
+      createdAt: session.createdAt,
+      isCurrent: session.id === currentSessionId,
+    }));
+  }
+
+  async logoutOtherSessions(userId: string, currentSessionId?: string) {
+    if (!currentSessionId) {
+      throw new UnauthorizedException('Current session is required');
+    }
+
+    await this.prisma.authSession.updateMany({
+      where: {
+        userId,
+        id: {
+          not: currentSessionId,
+        },
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+        revokedReason: 'logout_other_devices',
+      },
+    });
+
+    return {
+      message: 'Logged out other devices successfully',
+    };
+  }
+
+  async revokeSession(userId: string, sessionId: string) {
+    const session = await this.prisma.authSession.findUnique({
+      where: {
+        id: sessionId,
+      },
+    });
+
+    if (!session || session.userId !== userId) {
+      throw new UnauthorizedException('Device session not found');
+    }
+
+    await this.prisma.authSession.updateMany({
+      where: {
+        id: sessionId,
+        userId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+        revokedReason: 'device_logout',
+      },
+    });
+
+    return {
+      message: 'Device logged out successfully',
     };
   }
 
@@ -208,19 +386,155 @@ export class AuthService {
     return randomInt(0, 1_000_000).toString().padStart(6, '0');
   }
 
+  private async createAuthenticatedSession(user: UserEntity | User, sessionContext: SessionContext) {
+    const userEntity = plainToInstance(UserEntity, user);
+    const sessionId = randomUUID();
+    const tokenFamily = randomUUID();
+    const accessToken = this.signAccessToken(userEntity, sessionId);
+    const refreshToken = this.signRefreshToken({
+      sub: userEntity.id,
+      sid: sessionId,
+      family: tokenFamily,
+      type: 'refresh',
+    });
+
+    await this.prisma.authSession.create({
+      data: {
+        id: sessionId,
+        userId: userEntity.id,
+        tokenFamily,
+        currentRefreshTokenHash: await this.hashToken(refreshToken),
+        ipAddress: sessionContext.ipAddress ?? null,
+        userAgent: sessionContext.userAgent ?? null,
+        expiresAt: this.getRefreshTokenExpiresAt(),
+      },
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      user: userEntity,
+    };
+  }
+
+  private signAccessToken(user: UserEntity, sessionId?: string) {
+    return this.jwtService.sign(
+      {
+        email: user.email,
+        sid: sessionId,
+        sub: user.id,
+        type: 'access',
+      },
+      {
+        expiresIn: this.getJwtExpiresIn() as any,
+      },
+    );
+  }
+
+  private signRefreshToken(payload: { sub: string; sid: string; family: string; type: 'refresh' }) {
+    return this.jwtService.sign(payload, {
+      secret: this.getRefreshTokenSecret(),
+      expiresIn: this.getRefreshTokenExpiresIn() as any,
+    });
+  }
+
+  private verifyRefreshToken(refreshToken: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token is required');
+    }
+
+    let payload: RefreshTokenPayload;
+
+    try {
+      payload = this.jwtService.verify(refreshToken, {
+        secret: this.getRefreshTokenSecret(),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (payload.type !== 'refresh') {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    return payload;
+  }
+
+  private async revokeTokenFamily(tokenFamily: string, revokedReason: string) {
+    await this.prisma.authSession.updateMany({
+      where: {
+        tokenFamily,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+        revokedReason,
+      },
+    });
+  }
+
+  private async hashToken(token: string) {
+    const salt = await bcrypt.genSalt();
+    return bcrypt.hash(token, salt);
+  }
+
+  private getJwtExpiresIn() {
+    const value = this.configService.get<string>('JWT_EXPIRES_IN');
+    if (!value) {
+      throw new Error('JWT_EXPIRES_IN must be set');
+    }
+    return value;
+  }
+
+  private getRefreshTokenExpiresIn() {
+    const value = this.configService.get<string>('REFRESH_TOKEN_EXPIRES_IN');
+    if (!value) {
+      throw new Error('REFRESH_TOKEN_EXPIRES_IN must be set');
+    }
+    return value;
+  }
+
+  private getRefreshTokenExpiresAt() {
+    return new Date(Date.now() + this.getRefreshTokenTtlMs());
+  }
+
+  private getRefreshTokenTtlMs() {
+    const value = this.configService.get<string>('REFRESH_TOKEN_TTL_MS');
+    if (!value) {
+      throw new Error('REFRESH_TOKEN_TTL_MS must be set');
+    }
+    return Number(value);
+  }
+
+  private getRefreshTokenSecret() {
+    const value = this.configService.get<string>('REFRESH_TOKEN_SECRET');
+    if (!value) {
+      throw new Error('REFRESH_TOKEN_SECRET must be set');
+    }
+    return value;
+  }
+
   private getOtpExpiresMinutes() {
-    return Number(this.configService.get<string>('OTP_EXPIRES_MINUTES') ?? 10);
+    const value = this.configService.get<string>('OTP_EXPIRES_MINUTES');
+    if (!value) {
+      throw new Error('OTP_EXPIRES_MINUTES must be set');
+    }
+    return Number(value);
   }
 
   private getOtpVerificationExpiresIn() {
-    return this.configService.get<string>('OTP_VERIFICATION_EXPIRES_IN') ?? '30m';
+    const value = this.configService.get<string>('OTP_VERIFICATION_EXPIRES_IN');
+    if (!value) {
+      throw new Error('OTP_VERIFICATION_EXPIRES_IN must be set');
+    }
+    return value;
   }
 
   private getOtpVerificationSecret() {
-    return (
-      this.configService.get<string>('OTP_VERIFICATION_SECRET') ??
-      this.configService.get<string>('JWT_SECRET') ??
-      'development-otp-secret'
-    );
+    const value = this.configService.get<string>('OTP_VERIFICATION_SECRET');
+    if (!value) {
+      throw new Error('OTP_VERIFICATION_SECRET must be set');
+    }
+    return value;
   }
 }

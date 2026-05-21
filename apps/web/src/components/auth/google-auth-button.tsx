@@ -20,7 +20,7 @@ export function GoogleAuthButton({
       type="button"
       variant="secondary"
       size="lg"
-      className="w-full justify-center border-white/10 bg-white/[0.03] text-white hover:border-white/20 hover:bg-white/[0.06]"
+      className="w-full justify-center"
       disabled={isLoading}
       onClick={onClick}
     >

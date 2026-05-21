@@ -10,11 +10,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+import { DashboardModal } from "./dashboard-modal";
 import type {
   WorkspaceDetail,
   WorkspaceActivityItem,
   WorkspaceInviteResponse,
-  WorkspaceRole,
 } from "./workspace-types";
 import {
   canDeleteWorkspace,
@@ -59,17 +59,8 @@ const MANAGEABLE_ROLES: Array<"ADMIN" | "MEMBER" | "GUEST"> = [
   "GUEST",
 ];
 
-function roleBadgeClasses(role: WorkspaceRole) {
-  switch (role) {
-    case "OWNER":
-      return "border-[#5b4216] bg-[#2f220d] text-[#f5c97a]";
-    case "ADMIN":
-      return "border-[#163f5b] bg-[#0c2433] text-[#7ec8ff]";
-    case "MEMBER":
-      return "border-[#1b4b33] bg-[#0f261a] text-[#7de2a8]";
-    default:
-      return "border-white/10 bg-white/[0.04] text-[#d6d6d1]";
-  }
+function roleBadgeClasses() {
+  return "ui-pressed-active text-[#d6d6d1]";
 }
 
 function isValidEmail(value: string) {
@@ -88,9 +79,7 @@ export function WorkspaceDetailsModal({
   onUpdateWorkspace,
   workspace,
 }: WorkspaceDetailsModalProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "activity">(
-    "overview",
-  );
+  const [activeTab, setActiveTab] = useState<"manage" | "activity">("manage");
   const [name, setName] = useState(workspace?.name ?? "");
   const [isEditingName, setIsEditingName] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
@@ -192,7 +181,10 @@ export function WorkspaceDetailsModal({
     }
   }
 
-  async function handleRoleChange(userId: string, role: "ADMIN" | "MEMBER" | "GUEST") {
+  async function handleRoleChange(
+    userId: string,
+    role: "ADMIN" | "MEMBER" | "GUEST",
+  ) {
     if (!workspace) {
       return;
     }
@@ -266,171 +258,168 @@ export function WorkspaceDetailsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 px-4">
-      <div className="w-full max-w-3xl rounded-[28px] border border-white/10 bg-[#101010] p-6 shadow-[0_40px_100px_rgba(0,0,0,0.6)]">
-        <div className="flex items-start justify-between gap-4 pb-4">
-          <div className="flex items-center gap-3">
-            <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-[#f5f5f3]">
-              {workspace.name}
-            </h2>
-            <span
-              className={`rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] ${roleBadgeClasses(currentUserRole)}`}
-            >
-              {formatWorkspaceRole(currentUserRole)}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-[12px] p-2 text-[#bdbdb8] transition hover:bg-white/6 hover:text-white"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab("overview")}
-            className={`rounded-[12px] px-4 py-2 text-sm transition ${
-              activeTab === "overview"
-                ? "bg-white/10 text-white"
-                : "text-[#9a9a95] hover:bg-white/6 hover:text-white"
-            }`}
-          >
-            Overview
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("activity")}
-            className={`rounded-[12px] px-4 py-2 text-sm transition ${
-              activeTab === "activity"
-                ? "bg-white/10 text-white"
-                : "text-[#9a9a95] hover:bg-white/6 hover:text-white"
-            }`}
-          >
-            Activity
-          </button>
-        </div>
-
-        {activeTab === "overview" ? (
-          <div className="mt-5 space-y-6">
-            <form onSubmit={handleSave} className="space-y-5">
-              <div className="border-b border-white/8 pb-5 text-sm text-[#d1d1cc]">
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-3">
-                        <span className="shrink-0 text-[11px] uppercase tracking-[0.14em] text-[#72726d]">
-                          Name
-                        </span>
-                        {isEditingName ? (
-                          <input
-                            value={name}
-                            onChange={(event) => setName(event.target.value)}
-                            className="w-full rounded-[12px] border border-white/10 bg-[#151515] px-3 py-2 text-sm text-white outline-none transition focus:border-white/40"
-                          />
-                        ) : (
-                          <span className="truncate text-base text-[#f3f3ef]">
-                            {workspace.name}
-                          </span>
-                        )}
-                      </div>
-                      {isEditingName && error ? (
-                        <p className="mt-2 text-xs text-[#f07f6a]">{error}</p>
-                      ) : null}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {canEditWorkspace && isEditingName ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setName(workspace.name);
-                              setIsEditingName(false);
-                            }}
-                            className="rounded-[12px] px-3 py-2 text-sm text-[#bdbdb8] transition hover:bg-white/6 hover:text-white"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={Boolean(error) || !hasChanges || isSaving}
-                            className="rounded-[12px] bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-[#e9e9e6] disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {isSaving ? "Saving..." : "Save"}
-                          </button>
-                        </>
-                      ) : canEditWorkspace ? (
-                        <button
-                          type="button"
-                          onClick={() => setIsEditingName(true)}
-                          className="rounded-[12px] p-2 text-[#bdbdb8] transition hover:bg-white/6 hover:text-white"
-                          aria-label="Edit workspace name"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="text-xs text-[#9a9a95]">
-                    <p>
-                      Created by {ownerMember?.user.name ?? workspace.createdBy} at{" "}
-                      {formatWorkspaceDate(workspace.createdAt)}
-                    </p>
-                  </div>
+    <DashboardModal
+      className="flex h-[min(760px,calc(100vh-48px))] max-w-3xl flex-col"
+      onClose={onClose}
+    >
+      <div className="flex shrink-0 items-start justify-between gap-4 pb-4">
+        <form onSubmit={handleSave} className="min-w-0 flex-1">
+          <div className="flex items-start gap-3">
+            {canEditWorkspace ? (
+              isEditingName ? (
+                <div className="mt-0.5 flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setName(workspace.name);
+                      setIsEditingName(false);
+                    }}
+                    className="rounded-[10px] p-2 text-[#9a9a95] transition hover:bg-white/6 hover:text-white"
+                    aria-label="Cancel workspace name edit"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={Boolean(error) || !hasChanges || isSaving}
+                    className="rounded-[10px] p-2 text-[#9a9a95] transition hover:bg-white/6 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Save workspace name"
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
                 </div>
-              </div>
-            </form>
-
-            {canManageMembers ? (
-              <section className="border-b border-white/8 pb-5">
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm font-medium text-[#f0f0ec]">Invite by email</p>
-                    <p className="mt-1 text-xs text-[#8f8f89]">
-                      They&apos;ll join as a guest using this workspace code flow.
-                    </p>
-                  </div>
-                  <div className="flex gap-3">
-                    <input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(event) => {
-                        setInviteEmail(event.target.value);
-                        setActionError(null);
-                        setInviteNotice(null);
-                      }}
-                      placeholder="teammate@company.com"
-                      className="min-w-0 flex-1 rounded-[12px] border border-white/10 bg-[#151515] px-4 py-3 text-sm text-white outline-none transition focus:border-white/40"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleInviteMember}
-                      disabled={!isValidEmail(inviteEmail) || isInviting}
-                      className="rounded-[12px] bg-white px-5 py-3 text-sm font-medium text-black transition hover:bg-[#e9e9e6] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isInviting ? "Sending..." : "Invite"}
-                    </button>
-                  </div>
-                </div>
-              </section>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingName(true)}
+                  className="mt-0.5 rounded-[10px] p-2 text-[#9a9a95] transition hover:bg-white/6 hover:text-white"
+                  aria-label="Edit workspace name"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )
             ) : null}
 
-            <section className="border-b border-white/8 pb-5">
-              <div className="flex items-center justify-between gap-3 text-sm text-[#d1d1cc]">
-                <span className="text-[11px] uppercase tracking-[0.14em] text-[#72726d]">
-                  Members
-                </span>
-                <span>{workspace.members.length}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-3">
+                {isEditingName ? (
+                  <input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    className="min-w-0 flex-1 bg-transparent py-0.5 text-[24px] font-semibold tracking-[-0.03em] text-[#f5f5f3] outline-none placeholder:text-[#666660]"
+                  />
+                ) : (
+                  <h2 className="truncate text-[24px] font-semibold tracking-[-0.03em] text-[#f5f5f3]">
+                    {workspace.name}
+                  </h2>
+                )}
+                {!isEditingName ? (
+                  <span
+                    className={`shrink-0 rounded-[10px] border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] ${roleBadgeClasses()}`}
+                  >
+                    {formatWorkspaceRole(currentUserRole)}
+                  </span>
+                ) : null}
               </div>
 
-              <div className="mt-4 overflow-hidden rounded-[18px] border border-white/8 bg-[#121212]">
-                <div className="max-h-[280px] overflow-y-auto">
+              <p className="mt-1 text-xs text-[#9a9a95]">
+                Created by {ownerMember?.user.name ?? workspace.createdBy} at{" "}
+                {formatWorkspaceDate(workspace.createdAt)}
+              </p>
+
+              {isEditingName && error ? (
+                <p className="mt-2 text-xs text-[#f07f6a]">{error}</p>
+              ) : null}
+            </div>
+          </div>
+        </form>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-[12px] p-2 text-[#bdbdb8] transition hover:bg-white/6 hover:text-white"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="mt-4 flex shrink-0 gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab("manage")}
+          className={cn(
+            "rounded-[12px] border border-transparent px-4 py-2 text-sm transition",
+            activeTab === "manage"
+              ? "ui-pressed-active font-medium"
+              : "text-[#9a9a95] hover:bg-white/6 hover:text-white",
+          )}
+        >
+          Manage
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("activity")}
+          className={cn(
+            "rounded-[12px] border border-transparent px-4 py-2 text-sm transition",
+            activeTab === "activity"
+              ? "ui-pressed-active font-medium"
+              : "text-[#9a9a95] hover:bg-white/6 hover:text-white",
+          )}
+        >
+          Activity
+        </button>
+      </div>
+
+      <div className="mt-5 min-h-0 flex-1 overflow-hidden">
+        {activeTab === "manage" ? (
+          <div className="flex h-full min-h-0 flex-col gap-5">
+            <section className="min-h-0 flex-1 border-b border-white/8 pb-5">
+              <div className="ui-pressed-active flex h-full min-h-0 flex-col overflow-hidden rounded-[14px] border">
+                <div className="border-b border-white/8 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-[#f0f0ec]">
+                        Members
+                      </p>
+                    </div>
+                    <span className="ui-pressed-active rounded-[10px] border px-3 py-1 text-[11px] font-medium text-[#c9c9c4]">
+                      {workspace.members.length}
+                    </span>
+                  </div>
+
+                  {canManageMembers ? (
+                    <div className="mt-4 flex gap-2">
+                      <input
+                        type="email"
+                        value={inviteEmail}
+                        onChange={(event) => {
+                          setInviteEmail(event.target.value);
+                          setActionError(null);
+                          setInviteNotice(null);
+                        }}
+                        placeholder="teammate@company.com"
+                        className="ui-pressed-active min-w-0 flex-1 rounded-[10px] border px-3.5 py-2.5 text-sm text-white outline-none transition placeholder:text-[#676762]"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleInviteMember}
+                        disabled={!isValidEmail(inviteEmail) || isInviting}
+                        className="ui-pressed-primary min-w-[96px] rounded-[10px] border px-5 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isInviting ? "Sending" : "Invite"}
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {inviteNotice ? (
+                    <p className="mt-3 text-xs text-[#84d3a3]">
+                      {inviteNotice}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-color:rgba(255,255,255,0.28)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/25 [&::-webkit-scrollbar-track]:bg-transparent">
                   {workspace.members.map((member) => {
                     const isCurrentUser = member.userId === currentUserId;
                     const canEditRole =
@@ -438,7 +427,9 @@ export function WorkspaceDetailsModal({
                       member.role !== "OWNER" &&
                       !isCurrentUser;
                     const canKickMember =
-                      canManageMembers && member.role !== "OWNER" && !isCurrentUser;
+                      canManageMembers &&
+                      member.role !== "OWNER" &&
+                      !isCurrentUser;
 
                     return (
                       <div
@@ -449,7 +440,9 @@ export function WorkspaceDetailsModal({
                           <div
                             aria-label={member.user.name}
                             className="h-9 w-9 rounded-full bg-cover bg-center"
-                            style={{ backgroundImage: `url(${member.user.avatarUrl})` }}
+                            style={{
+                              backgroundImage: `url(${member.user.avatarUrl})`,
+                            }}
                           />
                         ) : (
                           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#d66c12] text-xs font-semibold text-white">
@@ -470,49 +463,56 @@ export function WorkspaceDetailsModal({
                         <div className="flex items-center gap-2">
                           <div className="relative">
                             {canEditRole ? (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button
-                                      type="button"
-                                      disabled={updatingMemberId === member.userId}
-                                      className={cn(
-                                        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] outline-none transition group",
-                                        roleBadgeClasses(member.role),
-                                        "disabled:cursor-not-allowed disabled:opacity-60",
-                                      )}
-                                    >
-                                      <span>{formatWorkspaceRole(member.role)}</span>
-                                      <ChevronDown className="h-3.5 w-3.5 transition group-data-[state=open]:rotate-180" />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    {MANAGEABLE_ROLES.map((role) => {
-                                      const isSelected = member.role === role;
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      updatingMemberId === member.userId
+                                    }
+                                    className={cn(
+                                      "ui-pressed-open inline-flex items-center gap-2 rounded-[10px] border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] outline-none transition group",
+                                      roleBadgeClasses(),
+                                      "disabled:cursor-not-allowed disabled:opacity-60",
+                                    )}
+                                  >
+                                    <span>
+                                      {formatWorkspaceRole(member.role)}
+                                    </span>
+                                    <ChevronDown className="h-3.5 w-3.5 transition group-data-[state=open]:rotate-180" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {MANAGEABLE_ROLES.map((role) => {
+                                    const isSelected = member.role === role;
 
-                                      return (
-                                        <DropdownMenuItem
-                                          key={role}
-                                          onClick={() =>
-                                            void handleRoleChange(member.userId, role)
-                                          }
-                                          className={cn(
-                                            isSelected
-                                              ? "bg-white/8 text-white"
-                                              : "text-[#c3c3be] hover:bg-white/6 hover:text-white",
-                                          )}
-                                        >
-                                          <span>{formatWorkspaceRole(role)}</span>
-                                          {isSelected ? (
-                                            <Check className="ml-auto h-3.5 w-3.5 text-[#d9d9d4]" />
-                                          ) : null}
-                                        </DropdownMenuItem>
-                                      );
-                                    })}
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                    return (
+                                      <DropdownMenuItem
+                                        key={role}
+                                        onClick={() =>
+                                          void handleRoleChange(
+                                            member.userId,
+                                            role,
+                                          )
+                                        }
+                                        className={cn(
+                                          isSelected
+                                            ? "ui-pressed-active"
+                                            : "text-[#c3c3be] hover:bg-white/6 hover:text-white",
+                                        )}
+                                      >
+                                        <span>{formatWorkspaceRole(role)}</span>
+                                        {isSelected ? (
+                                          <Check className="ml-auto h-3.5 w-3.5 text-[#d9d9d4]" />
+                                        ) : null}
+                                      </DropdownMenuItem>
+                                    );
+                                  })}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             ) : (
                               <span
-                                className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] ${roleBadgeClasses(member.role)}`}
+                                className={`inline-flex rounded-[10px] border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] ${roleBadgeClasses()}`}
                               >
                                 {formatWorkspaceRole(member.role)}
                               </span>
@@ -522,11 +522,15 @@ export function WorkspaceDetailsModal({
                           {canKickMember ? (
                             <button
                               type="button"
-                              onClick={() => void handleRemoveMember(member.userId)}
+                              onClick={() =>
+                                void handleRemoveMember(member.userId)
+                              }
                               disabled={removingMemberId === member.userId}
-                              className="rounded-full border border-[#4a2723] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-[#d28f87] transition hover:border-[#6a3630] hover:text-[#f0b1a9] disabled:cursor-not-allowed disabled:opacity-50"
+                              className="ui-pressed-danger rounded-[10px] border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {removingMemberId === member.userId ? "Removing" : "Kick"}
+                              {removingMemberId === member.userId
+                                ? "Removing"
+                                : "Kick"}
                             </button>
                           ) : null}
                         </div>
@@ -535,13 +539,9 @@ export function WorkspaceDetailsModal({
                   })}
                 </div>
               </div>
-
-              {inviteNotice ? (
-                <p className="mt-3 text-xs text-[#84d3a3]">{inviteNotice}</p>
-              ) : null}
             </section>
 
-            <section className="space-y-3">
+            <section className="shrink-0 space-y-3">
               {canLeaveWorkspace ? (
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -556,7 +556,7 @@ export function WorkspaceDetailsModal({
                     type="button"
                     onClick={handleLeaveWorkspace}
                     disabled={isLeaving}
-                    className="rounded-[12px] border border-white/10 px-4 py-2 text-sm text-[#d4d4cf] transition hover:bg-white/6 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="ui-pressed-button rounded-[12px] border px-4 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isLeaving ? "Leaving..." : "Leave"}
                   </button>
@@ -565,23 +565,27 @@ export function WorkspaceDetailsModal({
 
               {canDeleteWorkspaceRecord ? (
                 <div className="space-y-2 pt-2">
-                  <p className="text-sm font-medium text-[#f5d4cf]">Delete workspace</p>
+                  <p className="text-sm font-medium text-[#f5d4cf]">
+                    Delete workspace
+                  </p>
                   <p className="text-xs text-[#b98b84]">
-                    Deleting will remove boards, lists, cards, members, and activity.
-                    This cannot be undone.
+                    Deleting will remove boards, lists, cards, members, and
+                    activity. This cannot be undone.
                   </p>
                   <div className="flex gap-3">
                     <input
                       value={deleteConfirmation}
-                      onChange={(event) => setDeleteConfirmation(event.target.value)}
+                      onChange={(event) =>
+                        setDeleteConfirmation(event.target.value)
+                      }
                       placeholder='Type "delete permanently"'
-                      className="min-w-0 flex-1 rounded-[12px] border border-[#6c322a] bg-[#180e0d] px-4 py-3 text-sm text-white outline-none transition focus:border-[#ca6d5f]"
+                      className="ui-pressed-active min-w-0 flex-1 rounded-[12px] border px-4 py-3 text-sm text-white outline-none transition"
                     />
                     <button
                       type="button"
                       onClick={handleDelete}
                       disabled={!canDelete || isDeleting}
-                      className="rounded-[12px] bg-[#ca4c37] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#dc5d48] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="ui-pressed-danger min-w-[104px] rounded-[12px] border px-5 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isDeleting ? "Deleting..." : "Delete"}
                     </button>
@@ -595,27 +599,37 @@ export function WorkspaceDetailsModal({
             ) : null}
           </div>
         ) : (
-          <div className="mt-5 space-y-3">
+          <div className="flex h-full min-h-0 flex-col overflow-y-auto [scrollbar-color:rgba(255,255,255,0.22)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent">
             {activityItems.length === 0 ? (
-              <div className="rounded-[18px] border border-dashed border-white/10 bg-[#121212] px-4 py-5 text-sm text-[#8f8f89]">
-                No workspace activity yet.
-              </div>
-            ) : (
-              activityItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-[16px] border border-white/8 bg-[#141414] px-4 py-3"
-                >
-                  <p className="text-sm text-[#f0f0ec]">{item.label}</p>
-                  <p className="mt-1 text-xs text-[#8f8f89]">
-                    {formatWorkspaceDate(item.timestamp)}
+              <div className="ui-pressed-active flex min-h-[420px] flex-1 items-center justify-center rounded-[14px] border border-dashed px-6 text-center">
+                <div>
+                  <p className="text-sm font-medium text-[#d9d9d4]">
+                    No workspace activity yet
+                  </p>
+                  <p className="mt-2 max-w-sm text-sm text-[#8f8f89]">
+                    Changes to members, roles, invitations, and workspace
+                    settings will appear here.
                   </p>
                 </div>
-              ))
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {activityItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-[16px] border border-white/8 bg-[#141414] px-4 py-3"
+                  >
+                    <p className="text-sm text-[#f0f0ec]">{item.label}</p>
+                    <p className="mt-1 text-xs text-[#8f8f89]">
+                      {formatWorkspaceDate(item.timestamp)}
+                    </p>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}
       </div>
-    </div>
+    </DashboardModal>
   );
 }

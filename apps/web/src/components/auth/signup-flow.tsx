@@ -14,28 +14,9 @@ import {
 import { AuthInput } from "@/components/auth/auth-input";
 import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { Button } from "@/components/ui/button";
-import {
-  getErrorMessage,
-  register,
-  requestOtp,
-  verifyOtp,
-} from "@/lib/auth";
-import { cn } from "@/lib/utils";
+import { register, requestOtp, verifyOtp } from "@/lib/auth";
 
 type SignupStep = "email" | "otp" | "profile";
-type BannerTone = "neutral" | "error" | "success";
-
-function getBannerClassName(tone: BannerTone) {
-  if (tone === "error") {
-    return "text-red-300";
-  }
-
-  if (tone === "success") {
-    return "text-emerald-300";
-  }
-
-  return "text-muted-foreground";
-}
 
 export function SignupFlow() {
   const router = useRouter();
@@ -46,144 +27,97 @@ export function SignupFlow() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [banner, setBanner] = useState<null | {
-    tone: BannerTone;
-    message: string;
-  }>(null);
+  const [emailError, setEmailError] = useState<string | undefined>();
+  const [otpError, setOtpError] = useState<string | undefined>();
+  const [nameError, setNameError] = useState<string | undefined>();
+  const [passwordError, setPasswordError] = useState<string | undefined>();
+  const [confirmPasswordError, setConfirmPasswordError] = useState<
+    string | undefined
+  >();
   const [verificationToken, setVerificationToken] = useState("");
 
-  const emailError =
-    banner?.tone === "error" && step === "email" ? banner.message : undefined;
-  const otpError =
-    banner?.tone === "error" && step === "otp" ? banner.message : undefined;
-  const profileError =
-    banner?.tone === "error" && step === "profile" ? banner.message : undefined;
+  async function handleSendOtp() {
+    const trimmedEmail = email.trim().toLowerCase();
 
-  async function handleContinueEmail() {
-    const trimmedEmail = email.trim();
+    setEmailError(undefined);
 
     if (!trimmedEmail) {
-      setBanner({
-        tone: "error",
-        message: "Enter your work email to continue.",
-      });
+      setEmailError("Enter your work email to continue.");
       return;
     }
 
     if (!trimmedEmail.includes("@")) {
-      setBanner({
-        tone: "error",
-        message: "Please enter a valid email address.",
-      });
-      setIsSubmitting(false);
+      setEmailError("Please enter a valid email address.");
       return;
     }
 
     setIsSubmitting(true);
-    setBanner({
-      tone: "neutral",
-      message: "Sending your verification code...",
-    });
 
     try {
-      await requestOtp(trimmedEmail.toLowerCase());
-      setEmail(trimmedEmail.toLowerCase());
+      await requestOtp(trimmedEmail);
+      setEmail(trimmedEmail);
       setStep("otp");
-      setBanner({
-        tone: "success",
-        message: "A verification code has been sent to your inbox.",
-      });
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        message: getErrorMessage(
-          error,
-          "We couldn't send a verification code right now.",
-        ),
-      });
+      setOtp("");
+      setOtpError(undefined);
+    } catch {
+      setEmailError("We couldn't send an OTP right now. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   async function handleVerifyOtp() {
-    if (otp.trim().length !== 6) {
-      setBanner({
-        tone: "error",
-        message: "Enter the 6-digit code to continue.",
-      });
+    const trimmedOtp = otp.trim();
+
+    setOtpError(undefined);
+
+    if (trimmedOtp.length !== 6) {
+      setOtpError("Enter the 6-digit OTP to continue.");
       return;
     }
 
     setIsSubmitting(true);
-    setBanner({
-      tone: "neutral",
-      message: "Verifying your code...",
-    });
 
     try {
-      const result = await verifyOtp(email.trim().toLowerCase(), otp.trim());
+      const result = await verifyOtp(email.trim().toLowerCase(), trimmedOtp);
       setVerificationToken(result.verificationToken);
       setStep("profile");
-      setBanner({
-        tone: "success",
-        message:
-          "Email verified. Finish your profile to create the workspace.",
-      });
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        message: getErrorMessage(
-          error,
-          "We couldn't verify that code. Please try again.",
-        ),
-      });
+    } catch {
+      setOtpError("We couldn't verify that OTP. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  async function handleCreateAccount() {
+  async function handleSignUp() {
     const trimmedName = name.trim();
 
+    setNameError(undefined);
+    setPasswordError(undefined);
+    setConfirmPasswordError(undefined);
+
     if (!trimmedName) {
-      setBanner({
-        tone: "error",
-        message: "Add your name so teammates know it’s you.",
-      });
+      setNameError("Add your name so teammates know it's you.");
       return;
     }
 
     if (password.length < 6) {
-      setBanner({
-        tone: "error",
-        message: "Choose a password with at least 6 characters.",
-      });
+      setPasswordError("Choose a password with at least 6 characters.");
       return;
     }
 
     if (password !== confirmPassword) {
-      setBanner({
-        tone: "error",
-        message: "Passwords do not match.",
-      });
+      setConfirmPasswordError("Passwords do not match.");
       return;
     }
 
     if (!verificationToken) {
-      setBanner({
-        tone: "error",
-        message: "Verify your email before creating the account.",
-      });
+      setOtpError("Verify your OTP before signing up.");
       setStep("otp");
       return;
     }
 
     setIsSubmitting(true);
-    setBanner({
-      tone: "neutral",
-      message: "Creating your workspace...",
-    });
 
     try {
       await register({
@@ -192,29 +126,23 @@ export function SignupFlow() {
         password,
         verificationToken,
       });
-      setBanner({
-        tone: "success",
-        message: `You're all set, ${trimmedName}. Your workspace is ready.`,
-      });
       router.replace("/dashboard");
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        message: getErrorMessage(
-          error,
-          "We couldn't create your account right now.",
-        ),
-      });
+    } catch {
+      setPasswordError("We couldn't create your account right now.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  async function handleGoogleSignup() {
-    setBanner({
-      tone: "error",
-      message: "Google sign-up is coming later. Use email for now.",
-    });
+  function handleGoogleSignup() {
+    return;
+  }
+
+  function handleBackToEmail() {
+    setStep("email");
+    setOtp("");
+    setVerificationToken("");
+    setOtpError(undefined);
   }
 
   return (
@@ -222,31 +150,15 @@ export function SignupFlow() {
       <AuthCardHeader
         eyebrow={<AuthCardBrand />}
         title="Create account"
-        description="Set up your workspace."
       />
 
       <AuthCardBody>
-        {banner ? (
-          <p
-            role="status"
-            aria-live="polite"
-            className={cn(
-              "flex min-h-5 items-center gap-2 text-sm leading-6",
-              getBannerClassName(banner.tone),
-            )}
-          >
-            <span className="size-1.5 rounded-full bg-current" />
-            {banner.message}
-          </p>
-        ) : null}
-
         {step === "email" ? (
           <div className="space-y-5">
             <GoogleAuthButton
               label="Continue with Google"
-              loadingLabel="Connecting..."
-              isLoading={isSubmitting}
               onClick={handleGoogleSignup}
+              disabled
             />
 
             <div className="flex items-center gap-3 text-xs uppercase tracking-[0.24em] text-muted-foreground">
@@ -261,7 +173,10 @@ export function SignupFlow() {
               label="Work email"
               placeholder="you@company.com"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setEmailError(undefined);
+              }}
               error={emailError}
             />
 
@@ -269,9 +184,9 @@ export function SignupFlow() {
               size="lg"
               className="w-full"
               disabled={isSubmitting}
-              onClick={handleContinueEmail}
+              onClick={handleSendOtp}
             >
-              {isSubmitting ? "Sending code..." : "Continue"}
+              {isSubmitting ? "Sending OTP..." : "Send OTP"}
             </Button>
           </div>
         ) : null}
@@ -281,12 +196,14 @@ export function SignupFlow() {
             <AuthInput
               id="signup-otp"
               inputMode="numeric"
-              label="Verification code"
+              label={`Enter OTP sent to your email ${email}.`}
               placeholder="123456"
+              wrapperClassName="space-y-4"
               value={otp}
-              onChange={(event) =>
-                setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
-              }
+              onChange={(event) => {
+                setOtp(event.target.value.replace(/\D/g, "").slice(0, 6));
+                setOtpError(undefined);
+              }}
               error={otpError}
             />
 
@@ -297,12 +214,9 @@ export function SignupFlow() {
                 size="lg"
                 className="w-full"
                 disabled={isSubmitting}
-                onClick={() => {
-                  setStep("email");
-                  setBanner(null);
-                }}
+                onClick={handleBackToEmail}
               >
-                Back
+                Use another email
               </Button>
               <Button
                 size="lg"
@@ -310,7 +224,7 @@ export function SignupFlow() {
                 disabled={isSubmitting}
                 onClick={handleVerifyOtp}
               >
-                {isSubmitting ? "Verifying..." : "Verify code"}
+                {isSubmitting ? "Verifying OTP..." : "Verify OTP"}
               </Button>
             </div>
           </div>
@@ -323,8 +237,11 @@ export function SignupFlow() {
               label="Full name"
               placeholder="Alex Morgan"
               value={name}
-              onChange={(event) => setName(event.target.value)}
-              error={profileError?.includes("name") ? profileError : undefined}
+              onChange={(event) => {
+                setName(event.target.value);
+                setNameError(undefined);
+              }}
+              error={nameError}
             />
 
             <AuthInput
@@ -333,10 +250,11 @@ export function SignupFlow() {
               label="Password"
               placeholder="Create a password"
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              error={
-                profileError?.includes("password") ? profileError : undefined
-              }
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setPasswordError(undefined);
+              }}
+              error={passwordError}
             />
 
             <AuthInput
@@ -345,8 +263,11 @@ export function SignupFlow() {
               label="Confirm password"
               placeholder="Confirm your password"
               value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              error={profileError?.includes("match") ? profileError : undefined}
+              onChange={(event) => {
+                setConfirmPassword(event.target.value);
+                setConfirmPasswordError(undefined);
+              }}
+              error={confirmPasswordError}
             />
 
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -356,20 +277,17 @@ export function SignupFlow() {
                 size="lg"
                 className="w-full"
                 disabled={isSubmitting}
-                onClick={() => {
-                  setStep("otp");
-                  setBanner(null);
-                }}
+                onClick={handleBackToEmail}
               >
-                Back
+                Use another email
               </Button>
               <Button
                 size="lg"
                 className="w-full"
                 disabled={isSubmitting}
-                onClick={handleCreateAccount}
+                onClick={handleSignUp}
               >
-                {isSubmitting ? "Creating account..." : "Create account"}
+                {isSubmitting ? "Signing up..." : "Sign up"}
               </Button>
             </div>
           </div>

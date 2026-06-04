@@ -29,7 +29,7 @@ export function AuthCardHeader({
 }: {
   eyebrow?: React.ReactNode;
   title: string;
-  description: string;
+  description?: string;
 }) {
   return (
     <div className="space-y-3">
@@ -40,9 +40,11 @@ export function AuthCardHeader({
         <h1 className="font-display text-3xl tracking-tight text-white sm:text-4xl">
           {title}
         </h1>
-        <p className="max-w-md text-sm leading-6 text-muted-foreground sm:text-[15px]">
-          {description}
-        </p>
+        {description ? (
+          <p className="max-w-md text-sm leading-6 text-muted-foreground sm:text-[15px]">
+            {description}
+          </p>
+        ) : null}
       </div>
     </div>
   );

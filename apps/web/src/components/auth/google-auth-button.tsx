@@ -8,11 +8,13 @@ export function GoogleAuthButton({
   label,
   loadingLabel,
   isLoading = false,
+  disabled = false,
   onClick,
 }: {
   label: string;
-  loadingLabel: string;
+  loadingLabel?: string;
   isLoading?: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -21,7 +23,7 @@ export function GoogleAuthButton({
       variant="secondary"
       size="lg"
       className="w-full justify-center"
-      disabled={isLoading}
+      disabled={disabled || isLoading}
       onClick={onClick}
     >
       {isLoading ? (
@@ -46,7 +48,7 @@ export function GoogleAuthButton({
           />
         </svg>
       )}
-      <span>{isLoading ? loadingLabel : label}</span>
+      <span>{isLoading ? loadingLabel ?? label : label}</span>
     </Button>
   );
 }

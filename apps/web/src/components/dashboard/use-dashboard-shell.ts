@@ -16,6 +16,10 @@ import {
   type AuthUser,
 } from "@/lib/auth";
 import {
+  createBoardEventsSocket,
+  type BoardRealtimeEvent,
+} from "@/lib/board-events";
+import {
   addBoardMember,
   createBoard,
   createBoardLabel,
@@ -489,6 +493,106 @@ export function useDashboardShell(user: AuthUser) {
       queryKey: dashboardQueryKeys.auth.sessions,
     });
   }
+
+  useEffect(() => {
+    if (!activeBoardId) {
+      return;
+    }
+
+    const socket = createBoardEventsSocket();
+    if (!socket) {
+      return;
+    }
+
+    function invalidateBoardEventData(event: BoardRealtimeEvent) {
+      if (event.boardId !== activeBoardId) {
+        return;
+      }
+
+      const affectedListIds = Array.from(
+        new Set(
+          [
+            ...(event.affectedListIds ?? []),
+            event.listId,
+            event.targetListId,
+          ].filter(Boolean) as string[],
+        ),
+      );
+      const shouldRefreshLists =
+        event.type.startsWith("list.") || event.type === "board.deleted";
+      const shouldRefreshBoardDetail =
+        event.type.startsWith("board.") ||
+        event.type === "card.created" ||
+        event.type === "card.updated";
+
+      if (event.workspaceId && event.workspaceId === activeWorkspaceId) {
+        void queryClient.invalidateQueries({
+          queryKey: dashboardQueryKeys.boards.list(event.workspaceId),
+        });
+      }
+
+      if (shouldRefreshBoardDetail) {
+        void queryClient.invalidateQueries({
+          queryKey: dashboardQueryKeys.boards.detail(event.boardId),
+        });
+      }
+
+      if (shouldRefreshLists) {
+        void queryClient.invalidateQueries({
+          queryKey: dashboardQueryKeys.boards.lists(event.boardId),
+        });
+      }
+
+      void queryClient.invalidateQueries({
+        queryKey: dashboardQueryKeys.boards.activity(event.boardId),
+      });
+
+      for (const listId of affectedListIds) {
+        void queryClient.invalidateQueries({
+          queryKey: dashboardQueryKeys.cards.list(event.boardId, listId),
+        });
+      }
+
+      if (
+        event.cardId &&
+        cardDetailModalState?.cardId === event.cardId &&
+        cardDetailModalState.boardId === event.boardId
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: dashboardQueryKeys.cards.detail(
+            cardDetailModalState.boardId,
+            cardDetailModalState.listId,
+            cardDetailModalState.cardId,
+          ),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: dashboardQueryKeys.cards.activity(
+            cardDetailModalState.boardId,
+            cardDetailModalState.listId,
+            cardDetailModalState.cardId,
+          ),
+        });
+      }
+    }
+
+    socket.on("connect", () => {
+      socket.emit("board:join", { boardId: activeBoardId });
+    });
+    socket.on("board:event", invalidateBoardEventData);
+
+    return () => {
+      socket.emit("board:leave", { boardId: activeBoardId });
+      socket.off("board:event", invalidateBoardEventData);
+      socket.disconnect();
+    };
+  }, [
+    activeBoardId,
+    activeWorkspaceId,
+    cardDetailModalState?.boardId,
+    cardDetailModalState?.cardId,
+    cardDetailModalState?.listId,
+    queryClient,
+  ]);
 
   async function handleCreateWorkspace(values: { name: string }) {
     const workspace = await createWorkspace(values);

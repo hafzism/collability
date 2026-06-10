@@ -21,11 +21,15 @@ import { RequireBoardRole } from '../common/decorators/require-board-role.decora
 import type { AuthenticatedRequest } from '../common/interfaces/authenticated-request.interface';
 import { UpdateBoardMemberRoleDto } from './dto/update-board-member-role.dto';
 import { CreateBoardLabelDto } from './dto/create-board-label.dto';
+import { BoardEventsService } from '../realtime/board-events.service';
 
 @Controller('boards')
 @UseGuards(JwtAuthGuard, BoardGuard)
 export class BoardsController {
-  constructor(private readonly boardsService: BoardsService) {}
+  constructor(
+    private readonly boardsService: BoardsService,
+    private readonly boardEventsService: BoardEventsService,
+  ) {}
 
   @Get(':boardId')
   async getBoard(
@@ -54,12 +58,24 @@ export class BoardsController {
     @Param('boardId') boardId: string,
     @Body() dto: CreateBoardLabelDto,
   ) {
-    return this.boardsService.createBoardLabel(
+    const label = await this.boardsService.createBoardLabel(
       boardId,
       req.user.id,
       dto.name,
       dto.color,
     );
+
+    this.boardEventsService.emitBoardEvent({
+      boardId,
+      type: 'board.label_created',
+      actorUserId: req.user.id,
+      entity: {
+        type: 'label',
+        id: label.id,
+      },
+    });
+
+    return label;
   }
 
   @Patch(':boardId')
@@ -69,7 +85,20 @@ export class BoardsController {
     @Param('boardId') boardId: string,
     @Body() dto: UpdateBoardDto,
   ) {
-    return this.boardsService.updateBoard(boardId, req.user.id, dto);
+    const board = await this.boardsService.updateBoard(boardId, req.user.id, dto);
+
+    this.boardEventsService.emitBoardEvent({
+      boardId,
+      type: 'board.updated',
+      actorUserId: req.user.id,
+      entity: {
+        type: 'board',
+        id: boardId,
+      },
+      workspaceId: board.workspaceId,
+    });
+
+    return board;
   }
 
   @Delete(':boardId')
@@ -79,7 +108,18 @@ export class BoardsController {
     @Req() req: AuthenticatedRequest,
     @Param('boardId') boardId: string,
   ) {
-    await this.boardsService.deleteBoard(boardId, req.user.id);
+    const board = await this.boardsService.deleteBoard(boardId, req.user.id);
+
+    this.boardEventsService.emitBoardEvent({
+      boardId,
+      type: 'board.deleted',
+      actorUserId: req.user.id,
+      entity: {
+        type: 'board',
+        id: boardId,
+      },
+      workspaceId: board.workspaceId,
+    });
   }
 
   @Post(':boardId/members')
@@ -89,12 +129,24 @@ export class BoardsController {
     @Param('boardId') boardId: string,
     @Body() dto: AddBoardMemberDto,
   ) {
-    return this.boardsService.addMember(
+    const member = await this.boardsService.addMember(
       boardId,
       dto.userId,
       dto.role,
       req.user.id,
     );
+
+    this.boardEventsService.emitBoardEvent({
+      boardId,
+      type: 'board.member_added',
+      actorUserId: req.user.id,
+      entity: {
+        type: 'member',
+        id: dto.userId,
+      },
+    });
+
+    return member;
   }
 
   @Delete(':boardId/members/:userId')
@@ -106,6 +158,16 @@ export class BoardsController {
     @Param('userId') userId: string,
   ) {
     await this.boardsService.removeMember(boardId, userId, req.user.id);
+
+    this.boardEventsService.emitBoardEvent({
+      boardId,
+      type: 'board.member_removed',
+      actorUserId: req.user.id,
+      entity: {
+        type: 'member',
+        id: userId,
+      },
+    });
   }
 
   @Patch(':boardId/members/:userId')
@@ -116,11 +178,23 @@ export class BoardsController {
     @Param('userId') userId: string,
     @Body() dto: UpdateBoardMemberRoleDto,
   ) {
-    return this.boardsService.updateMemberRole(
+    const member = await this.boardsService.updateMemberRole(
       boardId,
       userId,
       req.user.id,
       dto.role,
     );
+
+    this.boardEventsService.emitBoardEvent({
+      boardId,
+      type: 'board.member_role_changed',
+      actorUserId: req.user.id,
+      entity: {
+        type: 'member',
+        id: userId,
+      },
+    });
+
+    return member;
   }
 }

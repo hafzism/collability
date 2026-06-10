@@ -23,11 +23,15 @@ import { BoardGuard } from '../common/guards/board.guard';
 import { RequireBoardRole } from '../common/decorators/require-board-role.decorator';
 import { BoardRole } from '../common/enums/board-role.enum';
 import type { AuthenticatedRequest } from '../common/interfaces/authenticated-request.interface';
+import { BoardEventsService } from '../realtime/board-events.service';
 
 @Controller('boards/:boardId/lists/:listId/cards')
 @UseGuards(JwtAuthGuard, BoardGuard)
 export class CardsController {
-  constructor(private readonly cardsService: CardsService) {}
+  constructor(
+    private readonly cardsService: CardsService,
+    private readonly boardEventsService: BoardEventsService,
+  ) {}
 
   @Post()
   @RequireBoardRole(BoardRole.MANAGER, BoardRole.CONTRIBUTOR)
@@ -37,7 +41,27 @@ export class CardsController {
     @Param('listId') listId: string,
     @Body() dto: CreateCardDto,
   ) {
-    return this.cardsService.createCard(boardId, listId, req.user.id, dto);
+    const card = await this.cardsService.createCard(
+      boardId,
+      listId,
+      req.user.id,
+      dto,
+    );
+
+    this.boardEventsService.emitBoardEvent({
+      boardId,
+      type: 'card.created',
+      actorUserId: req.user.id,
+      affectedListIds: [listId],
+      cardId: card.id,
+      entity: {
+        type: 'card',
+        id: card.id,
+      },
+      listId,
+    });
+
+    return card;
   }
 
   @Get()
@@ -79,13 +103,28 @@ export class CardsController {
     @Param('cardId') cardId: string,
     @Body() dto: CreateCardCommentDto,
   ) {
-    return this.cardsService.createComment(
+    const comment = await this.cardsService.createComment(
       boardId,
       listId,
       cardId,
       req.user.id,
       dto.content,
     );
+
+    this.boardEventsService.emitBoardEvent({
+      boardId,
+      type: 'card.comment_created',
+      actorUserId: req.user.id,
+      affectedListIds: [listId],
+      cardId,
+      entity: {
+        type: 'comment',
+        id: comment.id,
+      },
+      listId,
+    });
+
+    return comment;
   }
 
   @Patch(':cardId')
@@ -103,30 +142,61 @@ export class CardsController {
       updateData.dueDate = dueDate ? new Date(dueDate) : null;
     }
 
-    return this.cardsService.updateCard(
+    const card = await this.cardsService.updateCard(
       boardId,
       listId,
       cardId,
       req.user.id,
       updateData,
     );
+
+    this.boardEventsService.emitBoardEvent({
+      boardId,
+      type: 'card.updated',
+      actorUserId: req.user.id,
+      affectedListIds: [listId],
+      cardId,
+      entity: {
+        type: 'card',
+        id: cardId,
+      },
+      listId,
+    });
+
+    return card;
   }
 
   @Patch(':cardId/reorder')
   @RequireBoardRole(BoardRole.MANAGER, BoardRole.CONTRIBUTOR)
   async reorderCard(
+    @Req() req: AuthenticatedRequest,
     @Param('boardId') boardId: string,
     @Param('listId') listId: string,
     @Param('cardId') cardId: string,
     @Body() dto: ReorderCardDto,
   ) {
-    return this.cardsService.reorderCard(
+    const card = await this.cardsService.reorderCard(
       boardId,
       listId,
       cardId,
       dto.beforeId,
       dto.afterId,
     );
+
+    this.boardEventsService.emitBoardEvent({
+      boardId,
+      type: 'card.reordered',
+      actorUserId: req.user.id,
+      affectedListIds: [listId],
+      cardId,
+      entity: {
+        type: 'card',
+        id: cardId,
+      },
+      listId,
+    });
+
+    return card;
   }
 
   @Patch(':cardId/move')
@@ -138,7 +208,7 @@ export class CardsController {
     @Param('cardId') cardId: string,
     @Body() dto: MoveCardDto,
   ) {
-    return this.cardsService.moveCard(
+    const card = await this.cardsService.moveCard(
       boardId,
       listId,
       cardId,
@@ -147,6 +217,22 @@ export class CardsController {
       dto.afterId,
       req.user.id,
     );
+
+    this.boardEventsService.emitBoardEvent({
+      boardId,
+      type: 'card.moved',
+      actorUserId: req.user.id,
+      affectedListIds: [listId, dto.targetListId],
+      cardId,
+      entity: {
+        type: 'card',
+        id: cardId,
+      },
+      listId,
+      targetListId: dto.targetListId,
+    });
+
+    return card;
   }
 
   @Delete(':cardId')
@@ -159,5 +245,18 @@ export class CardsController {
     @Param('cardId') cardId: string,
   ) {
     await this.cardsService.deleteCard(boardId, listId, cardId, req.user.id);
+
+    this.boardEventsService.emitBoardEvent({
+      boardId,
+      type: 'card.deleted',
+      actorUserId: req.user.id,
+      affectedListIds: [listId],
+      cardId,
+      entity: {
+        type: 'card',
+        id: cardId,
+      },
+      listId,
+    });
   }
 }

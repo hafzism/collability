@@ -4,6 +4,12 @@ import { WorkspacesService } from './workspaces.service';
 describe('WorkspacesService', () => {
   let service: WorkspacesService;
 
+  const activityService = {
+    log: jest.fn(),
+    listWorkspaceActivity: jest.fn(),
+    formatWorkspaceActivity: jest.fn(),
+  };
+
   const prismaService = {
     user: {
       findUnique: jest.fn(),
@@ -59,7 +65,18 @@ describe('WorkspacesService', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
-    service = new WorkspacesService(prismaService as any, authMailerService as any);
+    prismaService.$transaction.mockImplementation(
+      async (callback: (tx: typeof prismaService) => Promise<unknown>) =>
+        callback(prismaService as any),
+    );
+    activityService.log.mockResolvedValue(undefined);
+    activityService.listWorkspaceActivity.mockResolvedValue([]);
+    activityService.formatWorkspaceActivity.mockReturnValue('formatted');
+    service = new WorkspacesService(
+      prismaService as any,
+      authMailerService as any,
+      activityService as any,
+    );
   });
 
   it('creates a workspace with a unique slug, join code, and owner membership', async () => {
@@ -67,10 +84,6 @@ describe('WorkspacesService', () => {
       .mockResolvedValueOnce({ id: 'workspace-1', slug: 'product-ops' })
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null);
-    prismaService.$transaction.mockImplementation(
-      async (callback: (tx: typeof prismaService) => Promise<unknown>) =>
-        callback(prismaService as any),
-    );
     prismaService.workspace.create.mockResolvedValue({
       id: 'workspace-2',
       name: 'Product Ops',
@@ -182,6 +195,7 @@ describe('WorkspacesService', () => {
       updatedAt: new Date('2026-04-12T00:00:00.000Z'),
     });
     prismaService.workspaceMember.findUnique.mockResolvedValue(null);
+    prismaService.user.findUnique.mockResolvedValue({ name: 'Hafeez' });
     prismaService.workspaceMember.create.mockResolvedValue({
       id: 'membership-1',
       workspaceId: 'workspace-1',
@@ -219,6 +233,7 @@ describe('WorkspacesService', () => {
       userId: 'user-2',
       role: WorkspaceRole.GUEST,
     });
+    prismaService.user.findUnique.mockResolvedValue({ name: 'Alex' });
     prismaService.workspaceMember.update.mockResolvedValue({
       id: 'membership-1',
       workspaceId: 'workspace-1',
@@ -259,6 +274,7 @@ describe('WorkspacesService', () => {
       userId: 'user-2',
       role: WorkspaceRole.ADMIN,
     });
+    prismaService.user.findUnique.mockResolvedValue({ name: 'Alex' });
 
     await expect(service.leaveWorkspace('workspace-1', 'user-2')).resolves.toBeUndefined();
 
@@ -286,6 +302,15 @@ describe('WorkspacesService', () => {
   });
 
   it('updates the workspace name without changing the slug', async () => {
+    prismaService.workspace.findUnique.mockResolvedValue({
+      id: 'workspace-1',
+      name: 'Old Name',
+      slug: 'stable-slug',
+      joinCode: 'abc-def-ghi',
+      createdBy: 'user-1',
+      createdAt: new Date('2026-04-12T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-12T00:00:00.000Z'),
+    });
     prismaService.workspace.update.mockResolvedValue({
       id: 'workspace-1',
       name: 'New Name',
@@ -297,7 +322,7 @@ describe('WorkspacesService', () => {
     });
 
     await expect(
-      service.updateWorkspace('workspace-1', { name: ' New   Name ' }),
+      service.updateWorkspace('workspace-1', 'user-1', { name: ' New   Name ' }),
     ).resolves.toEqual({
       id: 'workspace-1',
       name: 'New Name',
@@ -315,10 +340,6 @@ describe('WorkspacesService', () => {
   });
 
   it('deletes workspace-owned records before deleting the workspace', async () => {
-    prismaService.$transaction.mockImplementation(
-      async (callback: (tx: typeof prismaService) => Promise<unknown>) =>
-        callback(prismaService as any),
-    );
     prismaService.workspace.delete.mockResolvedValue({ id: 'workspace-1' });
 
     await service.deleteWorkspace('workspace-1');

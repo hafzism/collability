@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { UsersModule } from '../users/users.module';
 import { BoardEventsGateway } from './board-events.gateway';
 import { BoardEventsService } from './board-events.service';
+import { BoardPresenceService } from './board-presence.service';
 
 @Global()
 @Module({
@@ -24,7 +25,7 @@ import { BoardEventsService } from './board-events.service';
       inject: [ConfigService],
     }),
   ],
-  providers: [BoardEventsGateway, BoardEventsService],
-  exports: [BoardEventsService],
+  providers: [BoardEventsGateway, BoardEventsService, BoardPresenceService],
+  exports: [BoardEventsService, BoardPresenceService],
 })
 export class RealtimeModule {}

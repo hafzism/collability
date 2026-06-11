@@ -3,6 +3,10 @@
 import { io, type Socket } from "socket.io-client";
 
 import { getAccessToken } from "./auth-session";
+import type {
+  BoardPresenceSnapshot,
+  BoardPresenceUpdate,
+} from "./board-presence";
 
 export type BoardEventType =
   | "board.updated"
@@ -40,11 +44,13 @@ export type BoardRealtimeEvent = {
 
 type ServerToClientEvents = {
   "board:event": (event: BoardRealtimeEvent) => void;
+  "board:presence": (snapshot: BoardPresenceSnapshot) => void;
 };
 
 type ClientToServerEvents = {
   "board:join": (input: { boardId: string }) => void;
   "board:leave": (input: { boardId: string }) => void;
+  "board:presence:update": (input: BoardPresenceUpdate) => void;
 };
 
 export type BoardEventsSocket = Socket<

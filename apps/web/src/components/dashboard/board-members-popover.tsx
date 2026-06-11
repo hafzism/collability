@@ -2,7 +2,10 @@
 
 import { UserPlus } from "lucide-react";
 
-import type { BoardPresenceSnapshot, BoardPresenceUser } from "@/lib/board-presence";
+import type {
+  BoardPresenceSnapshot,
+  BoardPresenceUser,
+} from "@/lib/board-presence";
 
 import type { BoardMember } from "./board-types";
 import { DashboardPopoverPanel } from "./dashboard-popover-panel";

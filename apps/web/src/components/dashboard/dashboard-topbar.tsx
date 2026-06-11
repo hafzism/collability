@@ -73,7 +73,10 @@ export function DashboardTopbar({
     [boardMembers, onlineUserIds],
   );
   const visibleMembers = sortedMembers.slice(0, 3);
-  const remainingMembersCount = Math.max(boardMembers.length - visibleMembers.length, 0);
+  const remainingMembersCount = Math.max(
+    boardMembers.length - visibleMembers.length,
+    0,
+  );
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -175,11 +178,15 @@ export function DashboardTopbar({
           type="button"
           aria-label="Members"
           onClick={() =>
-            setOpenPanel((current) => (current === "members" ? null : "members"))
+            setOpenPanel((current) =>
+              current === "members" ? null : "members",
+            )
           }
           className={cn(
             "ui-pressed-button flex h-8 min-w-[86px] items-center justify-center rounded-[10px] border px-3 transition",
-            openPanel === "members" ? "border-white/14 bg-white/8 text-white" : "",
+            openPanel === "members"
+              ? "border-white/14 bg-white/8 text-white"
+              : "",
           )}
         >
           <span className="flex -space-x-1.5">
@@ -218,7 +225,9 @@ export function DashboardTopbar({
           }}
           className={cn(
             "ui-pressed-button rounded-[10px] border p-2 transition",
-            openPanel === "activity" ? "border-white/14 bg-white/8 text-white" : "",
+            openPanel === "activity"
+              ? "border-white/14 bg-white/8 text-white"
+              : "",
           )}
         >
           <Clock3 className="h-4 w-4" />

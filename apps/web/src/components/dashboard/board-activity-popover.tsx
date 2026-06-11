@@ -57,7 +57,9 @@ export function BoardActivityPopover({
         ) : (
           <div className="flex h-full min-h-[220px] items-center justify-center text-center">
             <div>
-              <p className="text-sm font-medium text-[#f0f0ec]">No activity yet</p>
+              <p className="text-sm font-medium text-[#f0f0ec]">
+                No activity yet
+              </p>
               <p className="mt-1 text-[12px] text-[#8f8f89]">
                 Board updates will appear here.
               </p>

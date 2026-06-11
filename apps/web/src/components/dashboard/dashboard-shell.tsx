@@ -76,11 +76,18 @@ export function DashboardShell({
         >
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#0f0f10] transition-colors duration-200">
             <DashboardTopbar
+              activityItems={
+                dashboard.activeBoard
+                  ? dashboard.boardActivityById[dashboard.activeBoard.id] ?? []
+                  : []
+              }
               boardName={dashboard.activeBoard?.title ?? "Boards"}
               boardMembers={dashboard.activeBoardDetail?.members ?? []}
+              boardPresence={dashboard.boardPresence}
               canManageBoard={
                 dashboard.activeBoardDetail?.currentUserBoardRole === "MANAGER"
               }
+              currentUserId={user.id}
               isSidebarOpen={dashboard.isSidebarOpen}
               onCreateList={() => {
                 if (
@@ -98,7 +105,6 @@ export function DashboardShell({
                 }
 
                 void dashboard.refreshBoardActivity(dashboard.activeBoard.id);
-                dashboard.setIsBoardActivityModalOpen(true);
               }}
               onOpenBoardMembers={() => {
                 dashboard.setIsBoardMembersModalOpen(true);

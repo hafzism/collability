@@ -1,14 +1,11 @@
 "use client";
 
-import {
-  CalendarDays,
-  Info,
-  MessageSquareText,
-} from "lucide-react";
+import { CalendarDays, Info, MessageSquareText } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 import { cn } from "@/lib/utils";
+import type { CardPresenceSummary } from "@/lib/board-presence";
 
 import type { BoardCard } from "../board-types";
 import { getAvatarFallback } from "../workspace-utils";
@@ -24,17 +21,31 @@ export function BoardCardBody({
   onOpenComments,
   onOpenDetails,
   className,
+  presence,
 }: {
   boardId: string;
   card: BoardCard;
   onOpenComments: CardActionHandler;
   onOpenDetails: CardActionHandler;
   className?: string;
+  presence?: CardPresenceSummary;
 }) {
+  const hasEditors = Boolean(presence?.editors.length);
+  const hasViewers = Boolean(presence?.viewers.length);
+  const visiblePresenceUsers = presence?.editors.length
+    ? presence.editors
+    : (presence?.viewers ?? []);
+
   return (
     <div
       className={cn(
         "rounded-[20px] border border-white/7 bg-[linear-gradient(180deg,#1a1a1b_0%,#141415_100%)] p-4 text-left shadow-[0_14px_34px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.03)] ring-1 ring-white/[0.02]",
+        hasEditors
+          ? "border-[#d8614c]/70 shadow-[0_18px_38px_rgba(216,97,76,0.12),0_14px_34px_rgba(0,0,0,0.26)] ring-[#d8614c]/20"
+          : "",
+        !hasEditors && hasViewers
+          ? "border-[#47d681]/60 shadow-[0_18px_38px_rgba(71,214,129,0.1),0_14px_34px_rgba(0,0,0,0.26)] ring-[#47d681]/20"
+          : "",
         className,
       )}
     >
@@ -77,6 +88,30 @@ export function BoardCardBody({
       <h4 className="mt-3 text-[14px] font-medium leading-5 text-[#f2f2f0]">
         {card.title}
       </h4>
+
+      {visiblePresenceUsers.length > 0 ? (
+        <div className="mt-2 flex items-center gap-2">
+          <div className="flex -space-x-1.5">
+            {visiblePresenceUsers.slice(0, 3).map((user) => (
+              <span
+                key={user.userId}
+                title={user.name}
+                className="flex h-5 w-5 items-center justify-center rounded-full border border-[#141415] bg-[#d66c12] text-[8px] font-semibold text-white"
+              >
+                {getAvatarFallback(user.name)}
+              </span>
+            ))}
+          </div>
+          <span
+            className={cn(
+              "truncate text-[10px]",
+              hasEditors ? "text-[#e18b7c]" : "text-[#7fe3a0]",
+            )}
+          >
+            {hasEditors ? "Editing" : "Viewing"}
+          </span>
+        </div>
+      ) : null}
 
       {card.description ? (
         <p className="mt-2 line-clamp-3 text-[12px] leading-5 text-[#a6a6a1]">
@@ -134,23 +169,31 @@ export function SortableCardItem({
   canManageCards,
   onOpenComments,
   onOpenDetails,
+  presence,
 }: {
   boardId: string;
   card: BoardCard;
   canManageCards: boolean;
   onOpenComments: CardActionHandler;
   onOpenDetails: CardActionHandler;
+  presence?: CardPresenceSummary;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({
-      id: getCardItemId(card.id),
-      disabled: !canManageCards,
-      data: {
-        type: "card",
-        cardId: card.id,
-        listId: card.listId,
-      },
-    });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: getCardItemId(card.id),
+    disabled: !canManageCards,
+    data: {
+      type: "card",
+      cardId: card.id,
+      listId: card.listId,
+    },
+  });
 
   return (
     <div
@@ -171,6 +214,7 @@ export function SortableCardItem({
         card={card}
         onOpenComments={onOpenComments}
         onOpenDetails={onOpenDetails}
+        presence={presence}
         className={cn(
           "transition-[transform,box-shadow] duration-200",
           canManageCards ? "cursor-grab active:cursor-grabbing" : "",

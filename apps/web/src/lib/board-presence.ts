@@ -28,3 +28,27 @@ export type BoardPresenceUpdate = {
   editingCardId?: string | null;
   typingCardId?: string | null;
 };
+
+export type CardPresenceSummary = {
+  viewers: BoardPresenceUser[];
+  editors: BoardPresenceUser[];
+  typers: BoardPresenceUser[];
+};
+
+export function getCardPresenceSummary(
+  snapshot: BoardPresenceSnapshot | null,
+  cardId: string,
+  currentUserId?: string,
+): CardPresenceSummary {
+  const users = (snapshot?.users ?? []).filter(
+    (user) => user.userId !== currentUserId,
+  );
+
+  return {
+    viewers: users.filter(
+      (user) => user.viewingCardId === cardId && user.editingCardId !== cardId,
+    ),
+    editors: users.filter((user) => user.editingCardId === cardId),
+    typers: users.filter((user) => user.typingCardId === cardId),
+  };
+}

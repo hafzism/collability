@@ -14,6 +14,7 @@ import { BoardsModule } from './boards/boards.module';
 import { ListsModule } from './lists/lists.module';
 import { CardsModule } from './cards/cards.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     BoardsModule,
     ListsModule,
     CardsModule,
+    NotificationsModule,
     RealtimeModule,
   ],
   controllers: [AppController],

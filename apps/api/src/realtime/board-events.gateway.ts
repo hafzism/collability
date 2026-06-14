@@ -23,7 +23,11 @@ import { UsersService } from '../users/users.service';
 import { WorkspacesService } from '../workspaces/workspaces.service';
 import { BoardPresenceService } from './board-presence.service';
 import type { BoardPresenceSnapshot } from './board-presence.types';
-import { BoardEventsService, getBoardRoomName } from './board-events.service';
+import {
+  BoardEventsService,
+  getBoardRoomName,
+  getUserRoomName,
+} from './board-events.service';
 
 export const BOARD_PRESENCE_EVENT_NAME = 'board:presence';
 
@@ -98,6 +102,7 @@ export class BoardEventsGateway
       client.data.auth = {
         sessionId: payload.sid,
       };
+      await client.join(getUserRoomName(user.id));
     } catch {
       client.disconnect(true);
     }

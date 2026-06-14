@@ -28,6 +28,21 @@ enum BoardVisibility {
   PRIVATE
 }
 
+enum BoardNotificationType {
+  CARD_ASSIGNED
+  CARD_UNASSIGNED
+  CARD_COMMENTED
+  CARD_DUE_REMINDER
+  BOARD_MEMBER_ADDED
+  BOARD_ROLE_CHANGED
+}
+
+enum DueDateReminderStatus {
+  PENDING
+  SENT
+  CANCELED
+}
+
 //--------------------
 // user
 // -------------------
@@ -50,6 +65,10 @@ model User {
   activityLogs         ActivityLog[]
   assignedCards        CardAssignee[]
   authSessions         AuthSession[]
+  boardNotifications   BoardNotification[]        @relation("BoardNotificationRecipient")
+  actedNotifications   BoardNotification[]        @relation("BoardNotificationActor")
+  notificationSettings BoardNotificationSetting[]
+  dueDateReminders     DueDateReminder[]
 }
 
 model EmailOtpVerification {
@@ -137,6 +156,9 @@ model Board {
   lists   List[]
   members BoardMember[]
   labels  Label[]
+  notifications        BoardNotification[]
+  notificationSettings BoardNotificationSetting[]
+  dueDateReminders     DueDateReminder[]
 }
 
 model BoardMember {
@@ -189,6 +211,7 @@ model Card {
   assignees CardAssignee[]
   labels    CardLabel[]
   comments  Comment[]
+  dueDateReminders DueDateReminder[]
 }
 
 model CardAssignee {
@@ -262,4 +285,72 @@ model ActivityLog {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id])
   user      User      @relation(fields: [userId], references: [id])
+}
+
+//--------------------
+// notifications
+// -------------------
+
+model BoardNotification {
+  id          String                @id @default(cuid())
+  boardId     String
+  userId      String
+  actorUserId String?
+  type        BoardNotificationType
+  title       String
+  body        String
+  entityType  String?
+  entityId    String?
+  metadata    Json?
+  readAt      DateTime?
+  createdAt   DateTime              @default(now())
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user  User  @relation("BoardNotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor User? @relation("BoardNotificationActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  dueDateReminders DueDateReminder[]
+
+  @@index([boardId, userId, createdAt])
+  @@index([userId, readAt, createdAt])
+}
+
+model BoardNotificationSetting {
+  id                 String   @id @default(cuid())
+  boardId            String
+  userId             String
+  inAppEnabled       Boolean  @default(true)
+  emailEnabled       Boolean  @default(false)
+  dueReminderMinutes Int[]    @default([1440])
+  mutedAt            DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, userId])
+}
+
+model DueDateReminder {
+  id             String                @id @default(cuid())
+  boardId        String
+  cardId         String
+  userId         String
+  notificationId String?
+  dueDate        DateTime
+  remindAt       DateTime
+  status         DueDateReminderStatus @default(PENDING)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  sentAt         DateTime?
+
+  board        Board              @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  card         Card               @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification BoardNotification? @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+
+  @@unique([cardId, userId, remindAt])
+  @@index([status, remindAt])
+  @@index([boardId, userId])
 }

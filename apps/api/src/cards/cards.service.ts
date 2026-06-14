@@ -1112,6 +1112,11 @@ export class CardsService {
             },
           },
         },
+        assignees: {
+          select: {
+            userId: true,
+          },
+        },
       },
     });
 
@@ -1137,6 +1142,24 @@ export class CardsService {
           },
         },
       });
+
+      for (const assignee of card.assignees) {
+        await this.notificationsService.createBoardNotification(tx, {
+          boardId,
+          userId: assignee.userId,
+          actorUserId: userId,
+          type: BoardNotificationType.CARD_COMMENTED,
+          title: 'New card comment',
+          body: `New comment on "${card.title}"`,
+          entityType: 'card',
+          entityId: cardId,
+          metadata: {
+            cardId,
+            cardTitle: card.title,
+            commentId: comment.id,
+          },
+        });
+      }
 
       return comment;
     });

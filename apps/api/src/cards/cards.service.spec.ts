@@ -326,4 +326,56 @@ describe('CardsService', () => {
       },
     );
   });
+
+  it('notifies card assignees when a new comment is added', async () => {
+    prismaService.list = {
+      findUnique: jest.fn().mockResolvedValue({ id: 'list-1', boardId: 'board-1' }),
+    };
+    prismaService.card.findFirst.mockResolvedValue({
+      id: 'card-1',
+      title: 'Ship notifications',
+      list: {
+        board: {
+          workspaceId: 'workspace-1',
+        },
+      },
+      assignees: [
+        {
+          userId: 'user-2',
+          user: {
+            name: 'Aaray',
+          },
+        },
+      ],
+    });
+    prismaService.comment = {
+      create: jest.fn().mockResolvedValue({
+        id: 'comment-1',
+        cardId: 'card-1',
+      }),
+    };
+    notificationsService.createBoardNotification.mockResolvedValue({
+      id: 'notification-1',
+    });
+
+    await service.createComment(
+      'board-1',
+      'list-1',
+      'card-1',
+      'user-1',
+      'Looks good',
+    );
+
+    expect(notificationsService.createBoardNotification).toHaveBeenCalledWith(
+      prismaService,
+      expect.objectContaining({
+        boardId: 'board-1',
+        userId: 'user-2',
+        actorUserId: 'user-1',
+        type: BoardNotificationType.CARD_COMMENTED,
+        entityType: 'card',
+        entityId: 'card-1',
+      }),
+    );
+  });
 });

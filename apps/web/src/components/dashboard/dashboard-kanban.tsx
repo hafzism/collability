@@ -24,6 +24,8 @@ import {
 import { motion } from "framer-motion";
 import { Check, MoreVertical, Plus, X } from "lucide-react";
 
+import type { BoardPresenceSnapshot } from "@/lib/board-presence";
+import { getCardPresenceSummary } from "@/lib/board-presence";
 import type {
   BoardCard,
   BoardLabel,
@@ -59,12 +61,14 @@ import {
 
 type DashboardKanbanProps = {
   activeBoardId: string;
+  boardPresence: BoardPresenceSnapshot | null;
   boardLabels: BoardLabel[];
   boardMembers: BoardMember[];
   canManageCards: boolean;
   canManageLists: boolean;
   cardsByListId: Record<string, BoardCard[]>;
   createListRequestId: number;
+  currentUserId: string;
   lists: BoardList[];
   onDeleteList: (input: { boardId: string; listId: string }) => Promise<void>;
   onCreateBoardLabel: (input: {
@@ -138,6 +142,7 @@ class BoardTouchSensor extends TouchSensor {
 
 function ListColumn({
   activeBoardId,
+  boardPresence,
   boardLabels,
   boardMembers,
   canManageCards,
@@ -146,6 +151,7 @@ function ListColumn({
   cards,
   column,
   confirmDeleteListId,
+  currentUserId,
   editingListId,
   editingTitle,
   isDraggingCard,
@@ -169,6 +175,7 @@ function ListColumn({
   renameInputRef,
 }: {
   activeBoardId: string;
+  boardPresence: BoardPresenceSnapshot | null;
   boardLabels: BoardLabel[];
   boardMembers: BoardMember[];
   canManageCards: boolean;
@@ -177,6 +184,7 @@ function ListColumn({
   cards: BoardCard[];
   column: BoardList;
   confirmDeleteListId: string | null;
+  currentUserId: string;
   editingListId: string | null;
   editingTitle: string;
   isDraggingCard: boolean;
@@ -290,7 +298,8 @@ function ListColumn({
                     Delete list?
                   </p>
                   <p className="mt-1 text-[11px] leading-5 text-[#bb8f87]">
-                    Are you sure you want to delete this list and all of its cards?
+                    Are you sure you want to delete this list and all of its
+                    cards?
                   </p>
                 </div>
                 <div className="flex items-center justify-end gap-2">
@@ -365,6 +374,11 @@ function ListColumn({
                       canManageCards={canManageCards}
                       onOpenComments={onOpenCardComments}
                       onOpenDetails={onOpenCardDetails}
+                      presence={getCardPresenceSummary(
+                        boardPresence,
+                        card.id,
+                        currentUserId,
+                      )}
                     />
                   ))}
                 </SortableContext>
@@ -406,12 +420,14 @@ function ListColumn({
 
 export function DashboardKanban({
   activeBoardId,
+  boardPresence,
   boardLabels,
   boardMembers,
   canManageCards,
   canManageLists,
   cardsByListId,
   createListRequestId,
+  currentUserId,
   lists,
   onDeleteList,
   onCreateBoardLabel,
@@ -433,15 +449,16 @@ export function DashboardKanban({
   );
   const [pendingListId, setPendingListId] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
-  const [draftsByListId, setDraftsByListId] = useState<Record<string, DraftCard | null>>(
-    {},
-  );
+  const [draftsByListId, setDraftsByListId] = useState<
+    Record<string, DraftCard | null>
+  >({});
   const [orderedLists, setOrderedLists] = useState<BoardList[]>(() =>
     sortListsByPosition(lists),
   );
-  const [orderedCardsByListId, setOrderedCardsByListId] = useState<CardsByListId>(
-    () => normalizeCardsByListId(sortListsByPosition(lists), cardsByListId),
-  );
+  const [orderedCardsByListId, setOrderedCardsByListId] =
+    useState<CardsByListId>(() =>
+      normalizeCardsByListId(sortListsByPosition(lists), cardsByListId),
+    );
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const createListRef = useRef<HTMLDivElement | null>(null);
@@ -468,53 +485,54 @@ export function DashboardKanban({
       return null;
     }
 
-    const currentListId = findCardListId(orderedCardsByListId, activeDrag.cardId);
+    const currentListId = findCardListId(
+      orderedCardsByListId,
+      activeDrag.cardId,
+    );
     if (!currentListId) {
       return null;
     }
 
     return (
-      orderedCardsByListId[currentListId]?.find((card) => card.id === activeDrag.cardId) ??
-      null
+      orderedCardsByListId[currentListId]?.find(
+        (card) => card.id === activeDrag.cardId,
+      ) ?? null
     );
   }, [activeDrag, orderedCardsByListId]);
   const activeList = useMemo(
     () =>
       activeDrag?.type === "list"
-        ? orderedLists.find((list) => list.id === activeDrag.listId) ?? null
+        ? (orderedLists.find((list) => list.id === activeDrag.listId) ?? null)
         : null,
     [activeDrag, orderedLists],
   );
-  const collisionDetection = useCallback<CollisionDetection>(
-    (args) => {
-      const pointerCollisions = pointerWithin(args);
+  const collisionDetection = useCallback<CollisionDetection>((args) => {
+    const pointerCollisions = pointerWithin(args);
 
-      if (pointerCollisions.length > 0) {
-        const findCollisionByType = (type: "card" | "list-drop" | "list") =>
-          pointerCollisions.find((collision) => {
-            const container = args.droppableContainers.find(
-              (droppable) => droppable.id === collision.id,
-            );
+    if (pointerCollisions.length > 0) {
+      const findCollisionByType = (type: "card" | "list-drop" | "list") =>
+        pointerCollisions.find((collision) => {
+          const container = args.droppableContainers.find(
+            (droppable) => droppable.id === collision.id,
+          );
 
-            return container?.data.current?.type === type;
-          });
+          return container?.data.current?.type === type;
+        });
 
-        const prioritizedCollision =
-          findCollisionByType("card") ??
-          findCollisionByType("list-drop") ??
-          findCollisionByType("list");
+      const prioritizedCollision =
+        findCollisionByType("card") ??
+        findCollisionByType("list-drop") ??
+        findCollisionByType("list");
 
-        if (prioritizedCollision) {
-          return [prioritizedCollision];
-        }
-
-        return pointerCollisions;
+      if (prioritizedCollision) {
+        return [prioritizedCollision];
       }
 
-      return closestCenter(args);
-    },
-    [],
-  );
+      return pointerCollisions;
+    }
+
+    return closestCenter(args);
+  }, []);
 
   useEffect(() => {
     activeDragRef.current = activeDrag;
@@ -532,7 +550,11 @@ export function DashboardKanban({
       areListOrdersEqual(current, nextLists) ? current : nextLists,
     );
     setOrderedCardsByListId((current) =>
-      areCardsByListEqual(current, nextCardsByListId, nextLists.map((list) => list.id))
+      areCardsByListEqual(
+        current,
+        nextCardsByListId,
+        nextLists.map((list) => list.id),
+      )
         ? current
         : nextCardsByListId,
     );
@@ -595,7 +617,9 @@ export function DashboardKanban({
     setListError(null);
     setDraftsByListId({});
     setOrderedLists(sortListsByPosition(lists));
-    setOrderedCardsByListId(normalizeCardsByListId(sortListsByPosition(lists), cardsByListId));
+    setOrderedCardsByListId(
+      normalizeCardsByListId(sortListsByPosition(lists), cardsByListId),
+    );
     setActiveDrag(null);
     dragSnapshotRef.current = null;
     lastCardOverRef.current = null;
@@ -653,7 +677,9 @@ export function DashboardKanban({
       setNewListTitle("");
     } catch (error) {
       setListError(
-        error instanceof Error ? error.message : "Unable to create list right now.",
+        error instanceof Error
+          ? error.message
+          : "Unable to create list right now.",
       );
     } finally {
       setPendingListId(null);
@@ -691,7 +717,9 @@ export function DashboardKanban({
       setEditingListId(null);
     } catch (error) {
       setListError(
-        error instanceof Error ? error.message : "Unable to rename list right now.",
+        error instanceof Error
+          ? error.message
+          : "Unable to rename list right now.",
       );
     } finally {
       setPendingListId(null);
@@ -711,7 +739,9 @@ export function DashboardKanban({
       setConfirmDeleteListId(null);
     } catch (error) {
       setListError(
-        error instanceof Error ? error.message : "Unable to delete list right now.",
+        error instanceof Error
+          ? error.message
+          : "Unable to delete list right now.",
       );
     } finally {
       setPendingListId(null);
@@ -783,13 +813,18 @@ export function DashboardKanban({
       return;
     }
 
-    const currentListId = findCardListId(orderedCardsByListId, activeDrag.cardId);
+    const currentListId = findCardListId(
+      orderedCardsByListId,
+      activeDrag.cardId,
+    );
     if (!currentListId || currentListId === targetListId) {
       return;
     }
 
     const currentCards = [...(orderedCardsByListId[currentListId] ?? [])];
-    const sourceIndex = currentCards.findIndex((card) => card.id === activeDrag.cardId);
+    const sourceIndex = currentCards.findIndex(
+      (card) => card.id === activeDrag.cardId,
+    );
     if (sourceIndex === -1) {
       return;
     }
@@ -799,7 +834,9 @@ export function DashboardKanban({
     const [movingCard] = sourceCards.splice(sourceIndex, 1);
     let targetIndex =
       overData.type === "card"
-        ? targetCards.findIndex((card) => card.id === (overData.cardId as string))
+        ? targetCards.findIndex(
+            (card) => card.id === (overData.cardId as string),
+          )
         : targetCards.length;
 
     if (targetIndex === -1) {
@@ -820,10 +857,18 @@ export function DashboardKanban({
     const nextTargetCards = renumberCards(targetCards, targetListId);
 
     if (
-      nextSourceCards.length === (orderedCardsByListId[currentListId] ?? []).length &&
-      nextTargetCards.length === (orderedCardsByListId[targetListId] ?? []).length &&
-      nextSourceCards.every((card, index) => card.id === orderedCardsByListId[currentListId]?.[index]?.id) &&
-      nextTargetCards.every((card, index) => card.id === orderedCardsByListId[targetListId]?.[index]?.id)
+      nextSourceCards.length ===
+        (orderedCardsByListId[currentListId] ?? []).length &&
+      nextTargetCards.length ===
+        (orderedCardsByListId[targetListId] ?? []).length &&
+      nextSourceCards.every(
+        (card, index) =>
+          card.id === orderedCardsByListId[currentListId]?.[index]?.id,
+      ) &&
+      nextTargetCards.every(
+        (card, index) =>
+          card.id === orderedCardsByListId[targetListId]?.[index]?.id,
+      )
     ) {
       return;
     }
@@ -866,7 +911,9 @@ export function DashboardKanban({
         return;
       }
 
-      const fromIndex = orderedLists.findIndex((list) => list.id === activeDrag.listId);
+      const fromIndex = orderedLists.findIndex(
+        (list) => list.id === activeDrag.listId,
+      );
       const toIndex = orderedLists.findIndex((list) => list.id === overListId);
 
       if (fromIndex === -1 || toIndex === -1) {
@@ -874,7 +921,9 @@ export function DashboardKanban({
         return;
       }
 
-      const nextLists = renumberLists(moveArrayItem(orderedLists, fromIndex, toIndex));
+      const nextLists = renumberLists(
+        moveArrayItem(orderedLists, fromIndex, toIndex),
+      );
       const beforeId = toIndex > 0 ? nextLists[toIndex - 1]?.id : undefined;
       const afterId =
         toIndex < nextLists.length - 1 ? nextLists[toIndex + 1]?.id : undefined;
@@ -894,7 +943,9 @@ export function DashboardKanban({
         });
       } catch (error) {
         setListError(
-          error instanceof Error ? error.message : "Unable to reorder list right now.",
+          error instanceof Error
+            ? error.message
+            : "Unable to reorder list right now.",
         );
         setOrderedLists(snapshot.lists);
       }
@@ -914,13 +965,16 @@ export function DashboardKanban({
     }
 
     const targetCards = orderedCardsByListId[targetListId] ?? [];
-    const sourceCardsBefore = snapshot.cardsByListId[activeDrag.sourceListId] ?? [];
+    const sourceCardsBefore =
+      snapshot.cardsByListId[activeDrag.sourceListId] ?? [];
     const sourceIndexBefore = sourceCardsBefore.findIndex(
       (card) => card.id === activeDrag.cardId,
     );
     let targetIndex =
       overData?.type === "card"
-        ? targetCards.findIndex((card) => card.id === (overData.cardId as string))
+        ? targetCards.findIndex(
+            (card) => card.id === (overData.cardId as string),
+          )
         : overData?.type === "list-drop"
           ? targetCards.length
           : targetCards.findIndex((card) => card.id === activeDrag.cardId);
@@ -933,7 +987,9 @@ export function DashboardKanban({
 
       targetIndex =
         overData.type === "card"
-          ? sourceCardsBefore.findIndex((card) => card.id === (overData.cardId as string))
+          ? sourceCardsBefore.findIndex(
+              (card) => card.id === (overData.cardId as string),
+            )
           : sourceCardsBefore.length - 1;
 
       if (targetIndex === -1) {
@@ -952,7 +1008,10 @@ export function DashboardKanban({
         sourceIndexBefore,
         targetIndex,
       );
-      const { beforeId, afterId } = getCardNeighbors(reorderedCards, targetIndex);
+      const { beforeId, afterId } = getCardNeighbors(
+        reorderedCards,
+        targetIndex,
+      );
       const nextOrderedCards = renumberCards(reorderedCards, targetListId);
 
       setOrderedCardsByListId((current) => ({
@@ -976,7 +1035,9 @@ export function DashboardKanban({
         });
       } catch (error) {
         setListError(
-          error instanceof Error ? error.message : "Unable to move card right now.",
+          error instanceof Error
+            ? error.message
+            : "Unable to move card right now.",
         );
         setOrderedCardsByListId(snapshot.cardsByListId);
       }
@@ -1006,7 +1067,9 @@ export function DashboardKanban({
       });
     } catch (error) {
       setListError(
-        error instanceof Error ? error.message : "Unable to move card right now.",
+        error instanceof Error
+          ? error.message
+          : "Unable to move card right now.",
       );
       setOrderedCardsByListId(snapshot.cardsByListId);
     }
@@ -1047,6 +1110,7 @@ export function DashboardKanban({
               >
                 <ListColumn
                   activeBoardId={activeBoardId}
+                  boardPresence={boardPresence}
                   boardLabels={boardLabels}
                   boardMembers={boardMembers}
                   canManageCards={canManageCards}
@@ -1055,6 +1119,7 @@ export function DashboardKanban({
                   cards={orderedCardsByListId[column.id] ?? []}
                   column={column}
                   confirmDeleteListId={confirmDeleteListId}
+                  currentUserId={currentUserId}
                   editingListId={editingListId}
                   editingTitle={editingTitle}
                   isDraggingCard={activeDrag?.type === "card"}
@@ -1113,7 +1178,9 @@ export function DashboardKanban({
                         data-no-dnd="true"
                         ref={inputRef}
                         value={newListTitle}
-                        onChange={(event) => setNewListTitle(event.target.value)}
+                        onChange={(event) =>
+                          setNewListTitle(event.target.value)
+                        }
                         onKeyDown={(event) => {
                           if (event.key === "Enter") {
                             event.preventDefault();
@@ -1132,7 +1199,10 @@ export function DashboardKanban({
                         data-no-dnd="true"
                         type="button"
                         onClick={() => void handleCreateListSubmit()}
-                        disabled={!normalizeListTitle(newListTitle) || pendingListId === "__new__"}
+                        disabled={
+                          !normalizeListTitle(newListTitle) ||
+                          pendingListId === "__new__"
+                        }
                         className="rounded-[10px] p-2 text-[#d4d4cf] transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                         aria-label="Save new list"
                       >
@@ -1159,12 +1229,17 @@ export function DashboardKanban({
           </div>
         </SortableContext>
 
-        {listError ? <p className="px-1 pt-3 text-sm text-[#f07f6a]">{listError}</p> : null}
+        {listError ? (
+          <p className="px-1 pt-3 text-sm text-[#f07f6a]">{listError}</p>
+        ) : null}
       </div>
 
       <DragOverlay>
         {activeDrag?.type === "card" && activeCard ? (
-          <motion.div initial={{ scale: 1 }} animate={{ scale: 1.03, rotate: -1 }}>
+          <motion.div
+            initial={{ scale: 1 }}
+            animate={{ scale: 1.03, rotate: -1 }}
+          >
             <BoardCardBody
               boardId={activeBoardId}
               card={activeCard}

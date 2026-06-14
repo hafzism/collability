@@ -16,117 +16,63 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage, login } from "@/lib/auth";
-import { cn } from "@/lib/utils";
-
-type FeedbackTone = "neutral" | "error" | "success";
-
-function getFeedbackClassName(tone: FeedbackTone) {
-  if (tone === "error") {
-    return "text-red-300";
-  }
-
-  if (tone === "success") {
-    return "text-emerald-300";
-  }
-
-  return "text-muted-foreground";
-}
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [feedback, setFeedback] = useState<null | {
-    tone: FeedbackTone;
-    message: string;
-  }>(null);
+  const [emailError, setEmailError] = useState<string | undefined>();
+  const [passwordError, setPasswordError] = useState<string | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleLogin() {
+    setEmailError(undefined);
+    setPasswordError(undefined);
+
     if (!email.trim().includes("@")) {
-      setFeedback({
-        tone: "error",
-        message: "Enter a valid email address to continue.",
-      });
-      setIsSubmitting(false);
+      setEmailError("Enter a valid email address to continue.");
       return;
     }
 
     if (password.length < 6) {
-      setFeedback({
-        tone: "error",
-        message: "Your password must be at least 6 characters long.",
-      });
-      setIsSubmitting(false);
+      setPasswordError("Your password must be at least 6 characters long.");
       return;
     }
 
     setIsSubmitting(true);
-    setFeedback({
-      tone: "neutral",
-      message: "Checking your credentials...",
-    });
 
     try {
-      const result = await login({
+      await login({
         email: email.trim().toLowerCase(),
         password,
       });
 
-      setFeedback({
-        tone: "success",
-        message: `Welcome back, ${result.user.name}. Your workspace is ready.`,
-      });
       router.replace("/dashboard");
     } catch (error) {
-      setFeedback({
-        tone: "error",
-        message: getErrorMessage(
+      setPasswordError(
+        getErrorMessage(
           error,
           "We couldn't sign you in with those details. Please try again.",
         ),
-      });
+      );
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  async function handleGoogleLogin() {
-    setFeedback({
-      tone: "error",
-      message: "Google sign-in is coming later. Use email for now.",
-    });
+  function handleGoogleLogin() {
+    return;
   }
 
   return (
     <AuthShell>
       <AuthCard>
-        <AuthCardHeader
-          eyebrow={<AuthCardBrand />}
-          title="Sign in"
-          description="Continue to your workspace."
-        />
+        <AuthCardHeader eyebrow={<AuthCardBrand />} title="Sign in to Collability" />
 
         <AuthCardBody>
-          {feedback ? (
-            <p
-              role="status"
-              aria-live="polite"
-              className={cn(
-                "flex min-h-5 items-center gap-2 text-sm leading-6",
-                getFeedbackClassName(feedback.tone),
-              )}
-            >
-              <span className="size-1.5 rounded-full bg-current" />
-              {feedback.message}
-            </p>
-          ) : null}
-
           <div className="space-y-5">
             <GoogleAuthButton
               label="Continue with Google"
-              loadingLabel="Connecting..."
-              isLoading={isSubmitting}
               onClick={handleGoogleLogin}
             />
 
@@ -142,12 +88,11 @@ export default function LoginPage() {
               label="Email"
               placeholder="you@company.com"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              error={
-                feedback?.tone === "error" && feedback.message.includes("email")
-                  ? feedback.message
-                  : undefined
-              }
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setEmailError(undefined);
+              }}
+              error={emailError}
             />
 
             <AuthInput
@@ -156,17 +101,22 @@ export default function LoginPage() {
               label="Password"
               placeholder="Enter your password"
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              error={
-                feedback?.tone === "error" &&
-                feedback.message.includes("Password")
-                  ? feedback.message
-                  : feedback?.tone === "error" &&
-                      feedback.message.includes("Passwords")
-                    ? feedback.message
-                    : undefined
-              }
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setPasswordError(undefined);
+              }}
+              error={passwordError}
             />
+
+            <div className="-mt-3 flex justify-end">
+              <a
+                href="#"
+                onClick={(event) => event.preventDefault()}
+                className="text-sm font-medium text-blue-400 transition-colors hover:text-blue-300"
+              >
+                Forgot password?
+              </a>
+            </div>
 
             <Button
               size="lg"
@@ -174,7 +124,7 @@ export default function LoginPage() {
               disabled={isSubmitting}
               onClick={handleLogin}
             >
-              {isSubmitting ? "Signing in..." : "Sign in"}
+              {isSubmitting ? "Continuing with email..." : "Continue with email"}
             </Button>
           </div>
         </AuthCardBody>
@@ -188,9 +138,6 @@ export default function LoginPage() {
             >
               Create an account
             </Link>
-          </span>
-          <span className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-            Secure
           </span>
         </AuthCardFooter>
       </AuthCard>

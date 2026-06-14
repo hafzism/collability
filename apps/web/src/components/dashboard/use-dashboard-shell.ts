@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   useQueries,
@@ -15,6 +15,15 @@ import {
   logoutOtherDevices,
   type AuthUser,
 } from "@/lib/auth";
+import {
+  createBoardEventsSocket,
+  type BoardEventsSocket,
+  type BoardRealtimeEvent,
+} from "@/lib/board-events";
+import type {
+  BoardPresenceSnapshot,
+  BoardPresenceUpdate,
+} from "@/lib/board-presence";
 import {
   addBoardMember,
   createBoard,
@@ -92,6 +101,10 @@ import type {
 export function useDashboardShell(user: AuthUser) {
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const boardEventsSocketRef = useRef<BoardEventsSocket | null>(null);
+  const cardDetailModalStateRef = useRef<CardDetailModalState | null>(null);
+  const [boardPresence, setBoardPresence] =
+    useState<BoardPresenceSnapshot | null>(null);
   const queryClient = useQueryClient();
   const activeBoardId = useDashboardUiStore((state) => state.activeBoardId);
   const activeWorkspaceId = useDashboardUiStore((state) => state.activeWorkspaceId);
@@ -392,6 +405,10 @@ export function useDashboardShell(user: AuthUser) {
   ]);
 
   useEffect(() => {
+    cardDetailModalStateRef.current = cardDetailModalState;
+  }, [cardDetailModalState]);
+
+  useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
       const target = event.target as Node;
 
@@ -489,6 +506,148 @@ export function useDashboardShell(user: AuthUser) {
       queryKey: dashboardQueryKeys.auth.sessions,
     });
   }
+
+  const emitBoardPresenceUpdate = useCallback(
+    (input: Omit<BoardPresenceUpdate, "boardId">) => {
+      if (!activeBoardId) {
+        return;
+      }
+
+      boardEventsSocketRef.current?.emit("board:presence:update", {
+        boardId: activeBoardId,
+        ...input,
+      });
+    },
+    [activeBoardId],
+  );
+
+  useEffect(() => {
+    if (!activeBoardId) {
+      return;
+    }
+
+    const socket = createBoardEventsSocket();
+    if (!socket) {
+      return;
+    }
+    boardEventsSocketRef.current = socket;
+
+    function invalidateBoardEventData(event: BoardRealtimeEvent) {
+      if (event.boardId !== activeBoardId) {
+        return;
+      }
+
+      const affectedListIds = Array.from(
+        new Set(
+          [
+            ...(event.affectedListIds ?? []),
+            event.listId,
+            event.targetListId,
+          ].filter(Boolean) as string[],
+        ),
+      );
+      const shouldRefreshLists =
+        event.type.startsWith("list.") || event.type === "board.deleted";
+      const shouldRefreshBoardDetail =
+        event.type.startsWith("board.") ||
+        event.type === "card.created" ||
+        event.type === "card.updated";
+
+      if (event.workspaceId && event.workspaceId === activeWorkspaceId) {
+        void queryClient.invalidateQueries({
+          queryKey: dashboardQueryKeys.boards.list(event.workspaceId),
+        });
+      }
+
+      if (shouldRefreshBoardDetail) {
+        void queryClient.invalidateQueries({
+          queryKey: dashboardQueryKeys.boards.detail(event.boardId),
+        });
+      }
+
+      if (shouldRefreshLists) {
+        void queryClient.invalidateQueries({
+          queryKey: dashboardQueryKeys.boards.lists(event.boardId),
+        });
+      }
+
+      void queryClient.invalidateQueries({
+        queryKey: dashboardQueryKeys.boards.activity(event.boardId),
+      });
+
+      for (const listId of affectedListIds) {
+        void queryClient.invalidateQueries({
+          queryKey: dashboardQueryKeys.cards.list(event.boardId, listId),
+        });
+      }
+
+      const currentCardDetailModalState = cardDetailModalStateRef.current;
+
+      if (
+        event.cardId &&
+        currentCardDetailModalState?.cardId === event.cardId &&
+        currentCardDetailModalState.boardId === event.boardId
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: dashboardQueryKeys.cards.detail(
+            currentCardDetailModalState.boardId,
+            currentCardDetailModalState.listId,
+            currentCardDetailModalState.cardId,
+          ),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: dashboardQueryKeys.cards.activity(
+            currentCardDetailModalState.boardId,
+            currentCardDetailModalState.listId,
+            currentCardDetailModalState.cardId,
+          ),
+        });
+      }
+    }
+
+    function handlePresenceSnapshot(snapshot: BoardPresenceSnapshot) {
+      if (snapshot.boardId !== activeBoardId) {
+        return;
+      }
+
+      setBoardPresence(snapshot);
+    }
+
+    socket.on("connect", () => {
+      socket.emit("board:join", { boardId: activeBoardId });
+    });
+    socket.on("board:event", invalidateBoardEventData);
+    socket.on("board:presence", handlePresenceSnapshot);
+
+    return () => {
+      socket.emit("board:leave", { boardId: activeBoardId });
+      socket.off("board:event", invalidateBoardEventData);
+      socket.off("board:presence", handlePresenceSnapshot);
+      socket.disconnect();
+      if (boardEventsSocketRef.current === socket) {
+        boardEventsSocketRef.current = null;
+      }
+    };
+  }, [
+    activeBoardId,
+    activeWorkspaceId,
+    queryClient,
+  ]);
+
+  useEffect(() => {
+    if (!activeBoardId) {
+      return;
+    }
+
+    emitBoardPresenceUpdate({
+      viewingCardId:
+        cardDetailModalState?.boardId === activeBoardId
+          ? cardDetailModalState.cardId
+          : null,
+      editingCardId: null,
+      typingCardId: null,
+    });
+  }, [activeBoardId, cardDetailModalState, emitBoardPresenceUpdate]);
 
   async function handleCreateWorkspace(values: { name: string }) {
     const workspace = await createWorkspace(values);
@@ -1100,6 +1259,7 @@ export function useDashboardShell(user: AuthUser) {
     boardCreationWorkspaceDetail: boardCreationWorkspaceDetailQuery.data ?? null,
     boardManagementWorkspaceDetail:
       boardManagementWorkspaceDetailQuery.data ?? null,
+    boardPresence: boardPresence?.boardId === activeBoardId ? boardPresence : null,
     cardActivityById,
     cardDetailModalState,
     cardDetailsById,
@@ -1133,6 +1293,7 @@ export function useDashboardShell(user: AuthUser) {
     handleUpdateCard,
     handleUpdateWorkspace,
     handleUpdateWorkspaceMemberRole,
+    emitBoardPresenceUpdate,
     isAccountMenuOpen,
     isAccountSettingsModalOpen,
     isBoardActivityModalOpen,

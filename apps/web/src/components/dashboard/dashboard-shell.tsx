@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { type AuthUser } from "@/lib/auth";
+import { getCardPresenceSummary } from "@/lib/board-presence";
 
 import { AccountSettingsModal } from "./account-settings-modal";
 import { BoardActivityModal } from "./board-activity-modal";
@@ -44,7 +45,9 @@ export function DashboardShell({
           }
           onBoardSelect={dashboard.setActiveBoardId}
           onCreateBoard={() => dashboard.setIsCreateBoardModalOpen(true)}
-          onCreateWorkspace={() => dashboard.setIsCreateWorkspaceModalOpen(true)}
+          onCreateWorkspace={() =>
+            dashboard.setIsCreateWorkspaceModalOpen(true)
+          }
           onJoinWorkspace={() => dashboard.setIsJoinWorkspaceModalOpen(true)}
           onOpenSettings={() => {
             dashboard.setIsAccountMenuOpen(false);
@@ -76,16 +79,25 @@ export function DashboardShell({
         >
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#0f0f10] transition-colors duration-200">
             <DashboardTopbar
+              activityItems={
+                dashboard.activeBoard
+                  ? (dashboard.boardActivityById[dashboard.activeBoard.id] ??
+                    [])
+                  : []
+              }
               boardName={dashboard.activeBoard?.title ?? "Boards"}
               boardMembers={dashboard.activeBoardDetail?.members ?? []}
+              boardPresence={dashboard.boardPresence}
               canManageBoard={
                 dashboard.activeBoardDetail?.currentUserBoardRole === "MANAGER"
               }
+              currentUserId={user.id}
               isSidebarOpen={dashboard.isSidebarOpen}
               onCreateList={() => {
                 if (
                   !dashboard.activeBoard ||
-                  dashboard.activeBoardDetail?.currentUserBoardRole !== "MANAGER"
+                  dashboard.activeBoardDetail?.currentUserBoardRole !==
+                    "MANAGER"
                 ) {
                   return;
                 }
@@ -98,7 +110,6 @@ export function DashboardShell({
                 }
 
                 void dashboard.refreshBoardActivity(dashboard.activeBoard.id);
-                dashboard.setIsBoardActivityModalOpen(true);
               }}
               onOpenBoardMembers={() => {
                 dashboard.setIsBoardMembersModalOpen(true);
@@ -121,15 +132,20 @@ export function DashboardShell({
                 activeBoardId={dashboard.activeBoard?.id ?? ""}
                 boardLabels={dashboard.activeBoardDetail?.labels ?? []}
                 boardMembers={dashboard.activeBoardDetail?.members ?? []}
+                boardPresence={dashboard.boardPresence}
                 canManageCards={
-                  dashboard.activeBoardDetail?.currentUserBoardRole === "MANAGER" ||
-                  dashboard.activeBoardDetail?.currentUserBoardRole === "CONTRIBUTOR"
+                  dashboard.activeBoardDetail?.currentUserBoardRole ===
+                    "MANAGER" ||
+                  dashboard.activeBoardDetail?.currentUserBoardRole ===
+                    "CONTRIBUTOR"
                 }
                 canManageLists={
-                  dashboard.activeBoardDetail?.currentUserBoardRole === "MANAGER"
+                  dashboard.activeBoardDetail?.currentUserBoardRole ===
+                  "MANAGER"
                 }
                 cardsByListId={dashboard.cardsByListId}
                 createListRequestId={dashboard.createListRequestId}
+                currentUserId={user.id}
                 lists={dashboard.activeBoardLists}
                 onDeleteList={dashboard.handleDeleteList}
                 onCreateBoardLabel={dashboard.handleCreateBoardLabel}
@@ -169,7 +185,9 @@ export function DashboardShell({
           onClose={() => dashboard.setIsCreateBoardModalOpen(false)}
           onCreateBoard={dashboard.handleCreateBoard}
           onSubmitMembers={dashboard.handleSubmitBoardMembers}
-          workspaceMembers={dashboard.boardCreationWorkspaceDetail?.members ?? []}
+          workspaceMembers={
+            dashboard.boardCreationWorkspaceDetail?.members ?? []
+          }
           workspaceName={dashboard.activeWorkspace.name}
         />
       ) : null}
@@ -202,7 +220,9 @@ export function DashboardShell({
 
       {dashboard.isBoardActivityModalOpen && dashboard.activeBoard ? (
         <BoardActivityModal
-          activityItems={dashboard.boardActivityById[dashboard.activeBoard.id] ?? []}
+          activityItems={
+            dashboard.boardActivityById[dashboard.activeBoard.id] ?? []
+          }
           boardName={dashboard.activeBoard.title}
           onClose={() => dashboard.setIsBoardActivityModalOpen(false)}
         />
@@ -211,7 +231,9 @@ export function DashboardShell({
       {cardDetailModalState &&
       dashboard.cardDetailsById[cardDetailModalState.cardId] ? (
         <CardDetailModal
-          activityItems={dashboard.cardActivityById[cardDetailModalState.cardId] ?? []}
+          activityItems={
+            dashboard.cardActivityById[cardDetailModalState.cardId] ?? []
+          }
           boardLabels={dashboard.activeBoardDetail?.labels ?? []}
           boardMembers={dashboard.activeBoardDetail?.members ?? []}
           canDeleteCard={
@@ -239,6 +261,7 @@ export function DashboardShell({
               content: input.content,
             })
           }
+          onPresenceChange={dashboard.emitBoardPresenceUpdate}
           onUpdateCard={(input) =>
             dashboard.handleUpdateCard({
               boardId: cardDetailModalState.boardId,
@@ -251,6 +274,11 @@ export function DashboardShell({
               assigneeIds: input.assigneeIds,
             })
           }
+          presence={getCardPresenceSummary(
+            dashboard.boardPresence,
+            cardDetailModalState.cardId,
+            user.id,
+          )}
         />
       ) : null}
 

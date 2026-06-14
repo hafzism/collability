@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
   Clock3,
@@ -12,14 +13,21 @@ import {
   Settings2,
 } from "lucide-react";
 
+import type { BoardPresenceSnapshot } from "@/lib/board-presence";
 import { cn } from "@/lib/utils";
-import type { BoardMember } from "./board-types";
+import { BoardActivityPopover } from "./board-activity-popover";
+import { BoardMembersPopover } from "./board-members-popover";
+import { BoardNotificationsPopover } from "./board-notifications-popover";
+import type { BoardActivityItem, BoardMember } from "./board-types";
 import { getAvatarFallback } from "./workspace-utils";
 
 type DashboardTopbarProps = {
+  activityItems: BoardActivityItem[];
   boardName: string;
   boardMembers: BoardMember[];
+  boardPresence: BoardPresenceSnapshot | null;
   canManageBoard: boolean;
+  currentUserId: string;
   isSidebarOpen: boolean;
   onCreateList: () => void;
   onOpenBoardActivity: () => void;
@@ -28,10 +36,15 @@ type DashboardTopbarProps = {
   onToggleSidebar: () => void;
 };
 
+type OpenPanel = "members" | "activity" | "notifications" | null;
+
 export function DashboardTopbar({
+  activityItems,
   boardName,
   boardMembers,
+  boardPresence,
   canManageBoard,
+  currentUserId,
   isSidebarOpen,
   onCreateList,
   onOpenBoardActivity,
@@ -39,8 +52,48 @@ export function DashboardTopbar({
   onOpenBoardSettings,
   onToggleSidebar,
 }: DashboardTopbarProps) {
-  const visibleMembers = boardMembers.slice(0, 3);
-  const remainingMembersCount = Math.max(boardMembers.length - visibleMembers.length, 0);
+  const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
+  const actionGroupRef = useRef<HTMLDivElement | null>(null);
+  const onlineUserIds = useMemo(
+    () => new Set((boardPresence?.users ?? []).map((user) => user.userId)),
+    [boardPresence?.users],
+  );
+  const sortedMembers = useMemo(
+    () =>
+      [...boardMembers].sort((left, right) => {
+        const leftOnline = onlineUserIds.has(left.userId);
+        const rightOnline = onlineUserIds.has(right.userId);
+
+        if (leftOnline !== rightOnline) {
+          return leftOnline ? -1 : 1;
+        }
+
+        return left.user.name.localeCompare(right.user.name);
+      }),
+    [boardMembers, onlineUserIds],
+  );
+  const visibleMembers = sortedMembers.slice(0, 3);
+  const remainingMembersCount = Math.max(
+    boardMembers.length - visibleMembers.length,
+    0,
+  );
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (
+        actionGroupRef.current &&
+        !actionGroupRef.current.contains(event.target as Node)
+      ) {
+        setOpenPanel(null);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, []);
 
   return (
     <header
@@ -120,12 +173,21 @@ export function DashboardTopbar({
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div ref={actionGroupRef} className="relative flex items-center gap-2">
         <button
           type="button"
           aria-label="Members"
-          onClick={onOpenBoardMembers}
-          className="ui-pressed-button flex h-8 min-w-[86px] items-center justify-center rounded-[10px] border px-3 transition"
+          onClick={() =>
+            setOpenPanel((current) =>
+              current === "members" ? null : "members",
+            )
+          }
+          className={cn(
+            "ui-pressed-button flex h-8 min-w-[86px] items-center justify-center rounded-[10px] border px-3 transition",
+            openPanel === "members"
+              ? "border-white/14 bg-white/8 text-white"
+              : "",
+          )}
         >
           <span className="flex -space-x-1.5">
             {visibleMembers.length > 0 ? (
@@ -133,9 +195,12 @@ export function DashboardTopbar({
                 <span
                   key={member.id}
                   title={member.user.name}
-                  className="flex h-5 w-5 items-center justify-center rounded-full border border-[#141415] bg-[#d66c12] text-[9px] font-semibold text-white"
+                  className="relative flex h-5 w-5 items-center justify-center rounded-full border border-[#141415] bg-[#d66c12] text-[9px] font-semibold text-white"
                 >
                   {getAvatarFallback(member.user.name)}
+                  {onlineUserIds.has(member.userId) ? (
+                    <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-[#141415] bg-[#47d681]" />
+                  ) : null}
                 </span>
               ))
             ) : (
@@ -152,8 +217,18 @@ export function DashboardTopbar({
         <button
           type="button"
           aria-label="Activity history"
-          onClick={onOpenBoardActivity}
-          className="ui-pressed-button rounded-[10px] border p-2 transition"
+          onClick={() => {
+            onOpenBoardActivity();
+            setOpenPanel((current) =>
+              current === "activity" ? null : "activity",
+            );
+          }}
+          className={cn(
+            "ui-pressed-button rounded-[10px] border p-2 transition",
+            openPanel === "activity"
+              ? "border-white/14 bg-white/8 text-white"
+              : "",
+          )}
         >
           <Clock3 className="h-4 w-4" />
         </button>
@@ -161,10 +236,42 @@ export function DashboardTopbar({
         <button
           type="button"
           aria-label="Notifications"
-          className="ui-pressed-button rounded-[10px] border p-2 transition"
+          onClick={() =>
+            setOpenPanel((current) =>
+              current === "notifications" ? null : "notifications",
+            )
+          }
+          className={cn(
+            "ui-pressed-button rounded-[10px] border p-2 transition",
+            openPanel === "notifications"
+              ? "border-white/14 bg-white/8 text-white"
+              : "",
+          )}
         >
           <Bell className="h-4 w-4" />
         </button>
+
+        {openPanel === "members" ? (
+          <BoardMembersPopover
+            boardMembers={boardMembers}
+            canManageBoard={canManageBoard}
+            currentUserId={currentUserId}
+            onManageMembers={() => {
+              setOpenPanel(null);
+              onOpenBoardMembers();
+            }}
+            presence={boardPresence}
+          />
+        ) : null}
+
+        {openPanel === "activity" ? (
+          <BoardActivityPopover
+            activityItems={activityItems}
+            boardName={boardName}
+          />
+        ) : null}
+
+        {openPanel === "notifications" ? <BoardNotificationsPopover /> : null}
       </div>
     </header>
   );

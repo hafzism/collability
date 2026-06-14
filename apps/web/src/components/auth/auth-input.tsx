@@ -8,6 +8,7 @@ interface AuthInputProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   hint?: string;
   error?: string;
+  wrapperClassName?: string;
 }
 
 export function AuthInput({
@@ -15,6 +16,7 @@ export function AuthInput({
   hint,
   error,
   className,
+  wrapperClassName,
   id,
   ...props
 }: AuthInputProps) {
@@ -23,7 +25,7 @@ export function AuthInput({
   const descriptionId = error ? errorId : hint ? hintId : undefined;
 
   return (
-    <label className="block space-y-2.5" htmlFor={id}>
+    <label className={cn("block space-y-2.5", wrapperClassName)} htmlFor={id}>
       <span className="text-sm font-medium tracking-tight text-white">
         {label}
       </span>

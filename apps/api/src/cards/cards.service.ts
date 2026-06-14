@@ -4,10 +4,11 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Card } from '@repo/database';
+import { BoardNotificationType, Card } from '@repo/database';
 import sanitizeHtml from 'sanitize-html';
 import { ActivityService } from '../activity/activity.service';
 import { BoardsService } from '../boards/boards.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { BoardCardDueState } from './dto/search-board-cards.dto';
 
 const sanitize = (value: string) => sanitizeHtml(value, { allowedTags: [], allowedAttributes: {} });
@@ -18,6 +19,7 @@ export class CardsService {
     private readonly prisma: PrismaService,
     private readonly activityService: ActivityService,
     private readonly boardsService: BoardsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private async logCardActivity(
@@ -391,6 +393,20 @@ export class CardsService {
         action: 'card.assignee_added',
         metadata,
       });
+      await this.notificationsService.createBoardNotification(tx, {
+        boardId: input.boardId,
+        userId: assignee.userId,
+        actorUserId: input.actorUserId,
+        type: BoardNotificationType.CARD_ASSIGNED,
+        title: 'Assigned to a card',
+        body: `You were assigned to "${input.cardTitle}"`,
+        entityType: 'card',
+        entityId: input.cardId,
+        metadata: {
+          cardId: input.cardId,
+          cardTitle: input.cardTitle,
+        },
+      });
     }
 
     for (const assignee of input.beforeAssignees) {
@@ -417,6 +433,20 @@ export class CardsService {
         cardId: input.cardId,
         action: 'card.assignee_removed',
         metadata,
+      });
+      await this.notificationsService.createBoardNotification(tx, {
+        boardId: input.boardId,
+        userId: assignee.userId,
+        actorUserId: input.actorUserId,
+        type: BoardNotificationType.CARD_UNASSIGNED,
+        title: 'Removed from a card',
+        body: `You were removed from "${input.cardTitle}"`,
+        entityType: 'card',
+        entityId: input.cardId,
+        metadata: {
+          cardId: input.cardId,
+          cardTitle: input.cardTitle,
+        },
       });
     }
 

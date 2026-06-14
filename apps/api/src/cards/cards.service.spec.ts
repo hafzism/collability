@@ -1,4 +1,5 @@
 import { CardsService } from './cards.service';
+import { BoardNotificationType } from '@repo/database';
 
 describe('CardsService', () => {
   let service: CardsService;
@@ -20,6 +21,12 @@ describe('CardsService', () => {
     logBoardActivity: jest.fn(),
   };
 
+  const notificationsService = {
+    createBoardNotification: jest.fn(),
+    replaceCardDueDateReminders: jest.fn(),
+    cancelCardDueDateReminders: jest.fn(),
+  };
+
   beforeEach(() => {
     jest.resetAllMocks();
     prismaService.$transaction.mockImplementation(
@@ -28,10 +35,11 @@ describe('CardsService', () => {
     );
     activityService.log.mockResolvedValue(undefined);
     boardsService.logBoardActivity.mockResolvedValue(undefined);
-    service = new CardsService(
+    service = new (CardsService as any)(
       prismaService as any,
       activityService as any,
       boardsService as any,
+      notificationsService as any,
     );
   });
 
@@ -196,5 +204,69 @@ describe('CardsService', () => {
     });
 
     jest.useRealTimers();
+  });
+
+  it('notifies newly assigned users when card assignees change', async () => {
+    prismaService.list = {
+      findUnique: jest.fn().mockResolvedValue({ id: 'list-1', boardId: 'board-1' }),
+    };
+    prismaService.card.findFirst.mockResolvedValue({
+      id: 'card-1',
+      title: 'Ship reminders',
+      description: null,
+      dueDate: null,
+      assignees: [],
+      labels: [],
+    });
+    prismaService.card.update = jest.fn().mockResolvedValue({ id: 'card-1' });
+    prismaService.card.findUnique = jest.fn().mockResolvedValue({
+      id: 'card-1',
+      title: 'Ship reminders',
+      assignees: [
+        {
+          userId: 'user-2',
+          user: {
+            name: 'Aaray',
+          },
+        },
+      ],
+      labels: [],
+      list: {
+        title: 'Doing',
+      },
+    });
+    prismaService.board = {
+      findUnique: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+    };
+    prismaService.boardMember = {
+      findMany: jest.fn().mockResolvedValue([{ userId: 'user-2' }]),
+    };
+    prismaService.cardAssignee = {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
+    };
+    prismaService.cardLabel = {
+      deleteMany: jest.fn(),
+      createMany: jest.fn(),
+    };
+    notificationsService.createBoardNotification.mockResolvedValue({
+      id: 'notification-1',
+    });
+
+    await service.updateCard('board-1', 'list-1', 'card-1', 'user-1', {
+      assigneeIds: ['user-2'],
+    });
+
+    expect(notificationsService.createBoardNotification).toHaveBeenCalledWith(
+      prismaService,
+      expect.objectContaining({
+        boardId: 'board-1',
+        userId: 'user-2',
+        actorUserId: 'user-1',
+        type: BoardNotificationType.CARD_ASSIGNED,
+        entityType: 'card',
+        entityId: 'card-1',
+      }),
+    );
   });
 });

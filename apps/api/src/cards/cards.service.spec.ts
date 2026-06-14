@@ -6,6 +6,7 @@ describe('CardsService', () => {
   const prismaService = {
     card: {
       delete: jest.fn(),
+      findMany: jest.fn(),
       findFirst: jest.fn(),
     },
     $transaction: jest.fn(),
@@ -88,5 +89,112 @@ describe('CardsService', () => {
         },
       },
     );
+  });
+
+  it('searches board cards by keyword and relational filters', async () => {
+    prismaService.card.findMany.mockResolvedValue([{ id: 'card-1' }]);
+
+    await expect(
+      service.searchBoardCards('board-1', {
+        query: 'billing',
+        assigneeIds: ['user-1'],
+        labelIds: ['label-1'],
+        creatorIds: ['user-2'],
+        listIds: ['list-2'],
+      }),
+    ).resolves.toEqual([{ id: 'card-1' }]);
+
+    expect(prismaService.card.findMany).toHaveBeenCalledWith({
+      where: {
+        list: {
+          boardId: 'board-1',
+          id: {
+            in: ['list-2'],
+          },
+        },
+        createdBy: {
+          in: ['user-2'],
+        },
+        assignees: {
+          some: {
+            userId: {
+              in: ['user-1'],
+            },
+          },
+        },
+        labels: {
+          some: {
+            labelId: {
+              in: ['label-1'],
+            },
+          },
+        },
+        OR: [
+          {
+            title: {
+              contains: 'billing',
+              mode: 'insensitive',
+            },
+          },
+          {
+            description: {
+              contains: 'billing',
+              mode: 'insensitive',
+            },
+          },
+        ],
+      },
+      orderBy: [
+        {
+          list: {
+            position: 'asc',
+          },
+        },
+        {
+          position: 'asc',
+        },
+      ],
+      include: expect.any(Object),
+    });
+  });
+
+  it('applies overdue and unassigned board-card filters', async () => {
+    prismaService.card.findMany.mockResolvedValue([]);
+
+    const now = new Date('2026-06-14T12:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(now);
+
+    await service.searchBoardCards('board-1', {
+      dueState: 'overdue',
+      unassigned: true,
+      withoutDueDate: false,
+    });
+
+    expect(prismaService.card.findMany).toHaveBeenCalledWith({
+      where: {
+        list: {
+          boardId: 'board-1',
+        },
+        dueDate: {
+          lt: now,
+        },
+        assignees: {
+          none: {},
+        },
+      },
+      orderBy: [
+        {
+          list: {
+            position: 'asc',
+          },
+        },
+        {
+          position: 'asc',
+        },
+      ],
+      include: expect.any(Object),
+    });
+
+    jest.useRealTimers();
   });
 });

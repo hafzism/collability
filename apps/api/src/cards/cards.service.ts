@@ -8,6 +8,7 @@ import { Card } from '@repo/database';
 import sanitizeHtml from 'sanitize-html';
 import { ActivityService } from '../activity/activity.service';
 import { BoardsService } from '../boards/boards.service';
+import type { BoardCardDueState } from './dto/search-board-cards.dto';
 
 const sanitize = (value: string) => sanitizeHtml(value, { allowedTags: [], allowedAttributes: {} });
 
@@ -103,6 +104,135 @@ export class CardsService {
       throw new ForbiddenException('List does not belong to the specified board');
     }
     return list;
+  }
+
+  private getBoardCardSearchWhere(
+    boardId: string,
+    filters: {
+      query?: string;
+      assigneeIds?: string[];
+      labelIds?: string[];
+      creatorIds?: string[];
+      listIds?: string[];
+      dueFrom?: Date;
+      dueTo?: Date;
+      dueState?: BoardCardDueState;
+      unassigned?: boolean;
+      withoutDueDate?: boolean;
+    },
+  ) {
+    const where: Record<string, unknown> = {
+      list: {
+        boardId,
+      },
+    };
+    const trimmedQuery = filters.query?.trim();
+
+    if (filters.listIds?.length) {
+      where.list = {
+        boardId,
+        id: {
+          in: filters.listIds,
+        },
+      };
+    }
+
+    if (filters.creatorIds?.length) {
+      where.createdBy = {
+        in: filters.creatorIds,
+      };
+    }
+
+    if (filters.assigneeIds?.length) {
+      where.assignees = {
+        some: {
+          userId: {
+            in: filters.assigneeIds,
+          },
+        },
+      };
+    }
+
+    if (filters.unassigned) {
+      where.assignees = {
+        none: {},
+      };
+    }
+
+    if (filters.labelIds?.length) {
+      where.labels = {
+        some: {
+          labelId: {
+            in: filters.labelIds,
+          },
+        },
+      };
+    }
+
+    if (trimmedQuery) {
+      where.OR = [
+        {
+          title: {
+            contains: trimmedQuery,
+            mode: 'insensitive',
+          },
+        },
+        {
+          description: {
+            contains: trimmedQuery,
+            mode: 'insensitive',
+          },
+        },
+      ];
+    }
+
+    const dueDateFilter: Record<string, Date> = {};
+
+    if (filters.dueFrom) {
+      dueDateFilter.gte = filters.dueFrom;
+    }
+
+    if (filters.dueTo) {
+      dueDateFilter.lte = filters.dueTo;
+    }
+
+    if (filters.dueState) {
+      const now = new Date();
+
+      if (filters.dueState === 'overdue') {
+        dueDateFilter.lt = now;
+      }
+
+      if (filters.dueState === 'today') {
+        const startOfDay = new Date(now);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(now);
+        endOfDay.setHours(23, 59, 59, 999);
+        dueDateFilter.gte = startOfDay;
+        dueDateFilter.lte = endOfDay;
+      }
+
+      if (filters.dueState === 'this_week') {
+        const dayOfWeek = now.getDay();
+        const offsetFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - offsetFromMonday);
+        startOfWeek.setHours(0, 0, 0, 0);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        dueDateFilter.gte = startOfWeek;
+        dueDateFilter.lte = endOfWeek;
+      }
+    }
+
+    if (filters.withoutDueDate) {
+      where.dueDate = null;
+    } else if (Object.keys(dueDateFilter).length > 0) {
+      where.dueDate = dueDateFilter;
+    }
+
+    return where;
   }
 
   async getCardDetail(boardId: string, listId: string, cardId: string): Promise<any> {
@@ -643,6 +773,37 @@ export class CardsService {
       orderBy: { position: 'asc' },
       take: limit,
       skip: offset,
+      include: this.cardInclude,
+    });
+  }
+
+  async searchBoardCards(
+    boardId: string,
+    filters: {
+      query?: string;
+      assigneeIds?: string[];
+      labelIds?: string[];
+      creatorIds?: string[];
+      listIds?: string[];
+      dueFrom?: Date;
+      dueTo?: Date;
+      dueState?: BoardCardDueState;
+      unassigned?: boolean;
+      withoutDueDate?: boolean;
+    },
+  ): Promise<any[]> {
+    return this.prisma.card.findMany({
+      where: this.getBoardCardSearchWhere(boardId, filters),
+      orderBy: [
+        {
+          list: {
+            position: 'asc',
+          },
+        },
+        {
+          position: 'asc',
+        },
+      ],
       include: this.cardInclude,
     });
   }

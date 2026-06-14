@@ -57,6 +57,7 @@ describe('BoardEventsGateway', () => {
     const client = {
       data: {},
       disconnect: jest.fn(),
+      join: jest.fn(),
       handshake: {
         auth: {
           token: 'access-token',
@@ -76,6 +77,7 @@ describe('BoardEventsGateway', () => {
     expect(client.data.auth).toEqual({
       sessionId: 'session-1',
     });
+    expect(client.join).toHaveBeenCalledWith('user:user-1');
   });
 
   it('allows workspace members to join workspace-visible board rooms', async () => {

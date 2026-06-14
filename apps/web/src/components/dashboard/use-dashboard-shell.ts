@@ -63,6 +63,15 @@ import {
   updateList,
 } from "@/lib/lists";
 import {
+  getBoardNotificationSetting,
+  getBoardNotificationUnreadCount,
+  listBoardNotifications,
+  markAllBoardNotificationsRead,
+  markBoardNotificationRead,
+  updateBoardNotificationSetting,
+  type UpdateBoardNotificationSettingInput,
+} from "@/lib/notifications";
+import {
   createWorkspace,
   deleteWorkspace,
   getWorkspace,
@@ -81,6 +90,7 @@ import type {
   BoardCard,
   BoardCardActivityItem,
   BoardCardDetail,
+  BoardNotification,
   BoardDetail,
   BoardList,
   BoardRole,
@@ -388,6 +398,24 @@ export function useDashboardShell(user: AuthUser) {
     enabled: isBoardActivityModalOpen && Boolean(activeBoardId),
   });
 
+  const activeBoardNotificationsQuery = useQuery({
+    queryKey: dashboardQueryKeys.notifications.list(activeBoardId),
+    queryFn: () => listBoardNotifications(activeBoardId),
+    enabled: Boolean(activeBoardId),
+  });
+
+  const activeBoardNotificationUnreadCountQuery = useQuery({
+    queryKey: dashboardQueryKeys.notifications.unreadCount(activeBoardId),
+    queryFn: () => getBoardNotificationUnreadCount(activeBoardId),
+    enabled: Boolean(activeBoardId),
+  });
+
+  const activeBoardNotificationSettingQuery = useQuery({
+    queryKey: dashboardQueryKeys.notifications.settings(activeBoardId),
+    queryFn: () => getBoardNotificationSetting(activeBoardId),
+    enabled: Boolean(activeBoardId),
+  });
+
   const activeCardDetailQuery = useQuery({
     queryKey: cardDetailModalState
       ? dashboardQueryKeys.cards.detail(
@@ -544,6 +572,15 @@ export function useDashboardShell(user: AuthUser) {
     });
   }
 
+  async function refreshBoardNotifications(boardId: string) {
+    await queryClient.invalidateQueries({
+      queryKey: dashboardQueryKeys.notifications.list(boardId),
+    });
+    await queryClient.invalidateQueries({
+      queryKey: dashboardQueryKeys.notifications.unreadCount(boardId),
+    });
+  }
+
   async function refreshListCards(boardId: string, listId: string) {
     await queryClient.invalidateQueries({
       queryKey: dashboardQueryKeys.cards.list(boardId, listId),
@@ -582,6 +619,31 @@ export function useDashboardShell(user: AuthUser) {
     await queryClient.invalidateQueries({
       queryKey: dashboardQueryKeys.auth.sessions,
     });
+  }
+
+  async function handleMarkBoardNotificationRead(input: {
+    boardId: string;
+    notificationId: string;
+  }) {
+    await markBoardNotificationRead(input);
+    await refreshBoardNotifications(input.boardId);
+  }
+
+  async function handleMarkAllBoardNotificationsRead(boardId: string) {
+    await markAllBoardNotificationsRead(boardId);
+    await refreshBoardNotifications(boardId);
+  }
+
+  async function handleUpdateBoardNotificationSetting(
+    boardId: string,
+    input: UpdateBoardNotificationSettingInput,
+  ) {
+    const setting = await updateBoardNotificationSetting(boardId, input);
+    queryClient.setQueryData(
+      dashboardQueryKeys.notifications.settings(boardId),
+      setting,
+    );
+    return setting;
   }
 
   const emitBoardPresenceUpdate = useCallback(
@@ -694,16 +756,38 @@ export function useDashboardShell(user: AuthUser) {
       setBoardPresence(snapshot);
     }
 
+    function handleNotificationCreated(notification: BoardNotification) {
+      if (notification.boardId !== activeBoardId) {
+        return;
+      }
+
+      queryClient.setQueryData<BoardNotification[]>(
+        dashboardQueryKeys.notifications.list(notification.boardId),
+        (current = []) =>
+          [
+            notification,
+            ...current.filter((item) => item.id !== notification.id),
+          ].slice(0, 30),
+      );
+      void queryClient.invalidateQueries({
+        queryKey: dashboardQueryKeys.notifications.unreadCount(
+          notification.boardId,
+        ),
+      });
+    }
+
     socket.on("connect", () => {
       socket.emit("board:join", { boardId: activeBoardId });
     });
     socket.on("board:event", invalidateBoardEventData);
     socket.on("board:presence", handlePresenceSnapshot);
+    socket.on("notification:created", handleNotificationCreated);
 
     return () => {
       socket.emit("board:leave", { boardId: activeBoardId });
       socket.off("board:event", invalidateBoardEventData);
       socket.off("board:presence", handlePresenceSnapshot);
+      socket.off("notification:created", handleNotificationCreated);
       socket.disconnect();
       if (boardEventsSocketRef.current === socket) {
         boardEventsSocketRef.current = null;
@@ -1338,6 +1422,10 @@ export function useDashboardShell(user: AuthUser) {
     activeWorkspace,
     boardActivityById,
     boardCardFilters: normalizedBoardCardFilters,
+    boardNotificationSetting: activeBoardNotificationSettingQuery.data ?? null,
+    boardNotifications: activeBoardNotificationsQuery.data ?? [],
+    boardNotificationUnreadCount:
+      activeBoardNotificationUnreadCountQuery.data?.unreadCount ?? 0,
     boardSearchText,
     boardCreationWorkspaceDetail: boardCreationWorkspaceDetailQuery.data ?? null,
     boardManagementWorkspaceDetail:
@@ -1365,6 +1453,8 @@ export function useDashboardShell(user: AuthUser) {
     handleLogoutOtherDevices,
     handleLeaveWorkspace,
     handleMoveCard,
+    handleMarkAllBoardNotificationsRead,
+    handleMarkBoardNotificationRead,
     handleOpenCardDetail,
     handleRemoveBoardMember,
     handleRemoveWorkspaceMember,
@@ -1372,6 +1462,7 @@ export function useDashboardShell(user: AuthUser) {
     handleReorderList,
     handleSubmitBoardMembers,
     handleUpdateBoard,
+    handleUpdateBoardNotificationSetting,
     handleUpdateBoardMemberRole,
     handleUpdateCard,
     handleUpdateWorkspace,

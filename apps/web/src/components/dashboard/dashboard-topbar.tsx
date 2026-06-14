@@ -25,16 +25,20 @@ import type {
   BoardLabel,
   BoardList,
   BoardMember,
+  BoardNotification,
 } from "./board-types";
 import { getAvatarFallback } from "./workspace-utils";
 
 type DashboardTopbarProps = {
   activityItems: BoardActivityItem[];
   boardFilters: BoardCardFilters;
+  boardId: string;
   boardLabels: BoardLabel[];
   boardLists: BoardList[];
   boardName: string;
   boardMembers: BoardMember[];
+  boardNotifications: BoardNotification[];
+  boardNotificationUnreadCount: number;
   boardPresence: BoardPresenceSnapshot | null;
   canManageBoard: boolean;
   currentUserId: string;
@@ -46,6 +50,11 @@ type DashboardTopbarProps = {
   onOpenBoardActivity: () => void;
   onOpenBoardMembers: () => void;
   onOpenBoardSettings: () => void;
+  onMarkAllBoardNotificationsRead: (boardId: string) => Promise<void>;
+  onMarkBoardNotificationRead: (input: {
+    boardId: string;
+    notificationId: string;
+  }) => Promise<void>;
   onToggleSidebar: () => void;
   boardSearchText: string;
 };
@@ -55,11 +64,14 @@ type OpenPanel = "members" | "activity" | "notifications" | "filters" | null;
 export function DashboardTopbar({
   activityItems,
   boardFilters,
+  boardId,
   boardLabels,
   boardLists,
   boardName,
   boardSearchText,
   boardMembers,
+  boardNotifications,
+  boardNotificationUnreadCount,
   boardPresence,
   canManageBoard,
   currentUserId,
@@ -71,6 +83,8 @@ export function DashboardTopbar({
   onOpenBoardActivity,
   onOpenBoardMembers,
   onOpenBoardSettings,
+  onMarkAllBoardNotificationsRead,
+  onMarkBoardNotificationRead,
   onToggleSidebar,
 }: DashboardTopbarProps) {
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
@@ -308,13 +322,20 @@ export function DashboardTopbar({
             )
           }
           className={cn(
-            "ui-pressed-button rounded-[10px] border p-2 transition",
+            "ui-pressed-button relative rounded-[10px] border p-2 transition",
             openPanel === "notifications"
               ? "border-white/14 bg-white/8 text-white"
               : "",
           )}
         >
           <Bell className="h-4 w-4" />
+          {boardNotificationUnreadCount > 0 ? (
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full border border-[#111112] bg-[#f2f2ee] px-1 text-[9px] font-semibold leading-none text-[#111112]">
+              {boardNotificationUnreadCount > 9
+                ? "9+"
+                : boardNotificationUnreadCount}
+            </span>
+          ) : null}
         </button>
 
         {openPanel === "members" ? (
@@ -337,7 +358,15 @@ export function DashboardTopbar({
           />
         ) : null}
 
-        {openPanel === "notifications" ? <BoardNotificationsPopover /> : null}
+        {openPanel === "notifications" ? (
+          <BoardNotificationsPopover
+            boardId={boardId}
+            notifications={boardNotifications}
+            onMarkAllRead={onMarkAllBoardNotificationsRead}
+            onMarkRead={onMarkBoardNotificationRead}
+            unreadCount={boardNotificationUnreadCount}
+          />
+        ) : null}
       </div>
     </header>
   );

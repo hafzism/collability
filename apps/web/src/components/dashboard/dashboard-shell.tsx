@@ -86,11 +86,16 @@ export function DashboardShell({
                   : []
               }
               boardFilters={dashboard.boardCardFilters}
+              boardId={dashboard.activeBoard?.id ?? ""}
               boardLabels={dashboard.activeBoardDetail?.labels ?? []}
               boardLists={dashboard.activeBoardLists}
               boardName={dashboard.activeBoard?.title ?? "Boards"}
               boardSearchText={dashboard.boardSearchText}
               boardMembers={dashboard.activeBoardDetail?.members ?? []}
+              boardNotifications={dashboard.boardNotifications}
+              boardNotificationUnreadCount={
+                dashboard.boardNotificationUnreadCount
+              }
               boardPresence={dashboard.boardPresence}
               canManageBoard={
                 dashboard.activeBoardDetail?.currentUserBoardRole === "MANAGER"
@@ -126,6 +131,12 @@ export function DashboardShell({
               onOpenBoardSettings={() => {
                 dashboard.setIsBoardSettingsModalOpen(true);
               }}
+              onMarkAllBoardNotificationsRead={
+                dashboard.handleMarkAllBoardNotificationsRead
+              }
+              onMarkBoardNotificationRead={
+                dashboard.handleMarkBoardNotificationRead
+              }
               onToggleSidebar={() =>
                 dashboard.setIsSidebarOpen((currentState) => !currentState)
               }
@@ -209,6 +220,10 @@ export function DashboardShell({
           }
           onClose={() => dashboard.setIsBoardSettingsModalOpen(false)}
           onDeleteBoard={dashboard.handleDeleteBoard}
+          notificationSetting={dashboard.boardNotificationSetting}
+          onUpdateNotificationSetting={
+            dashboard.handleUpdateBoardNotificationSetting
+          }
           onUpdateBoard={dashboard.handleUpdateBoard}
         />
       ) : null}

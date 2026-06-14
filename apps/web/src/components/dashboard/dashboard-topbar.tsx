@@ -75,6 +75,7 @@ export function DashboardTopbar({
 }: DashboardTopbarProps) {
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const actionGroupRef = useRef<HTMLDivElement | null>(null);
+  const filterPanelRef = useRef<HTMLDivElement | null>(null);
   const onlineUserIds = useMemo(
     () => new Set((boardPresence?.users ?? []).map((user) => user.userId)),
     [boardPresence?.users],
@@ -104,6 +105,9 @@ export function DashboardTopbar({
       if (
         actionGroupRef.current &&
         !actionGroupRef.current.contains(event.target as Node)
+        &&
+        filterPanelRef.current &&
+        !filterPanelRef.current.contains(event.target as Node)
       ) {
         setOpenPanel(null);
       }
@@ -185,24 +189,53 @@ export function DashboardTopbar({
             />
           </label>
 
-          <button
-            type="button"
-            aria-label="Filter"
-            onClick={() =>
-              setOpenPanel((current) =>
-                current === "filters" ? null : "filters",
-              )
-            }
-            className={cn(
-              "ui-pressed-button flex h-8 items-center gap-2 rounded-[10px] border px-3 text-[13px] transition",
-              openPanel === "filters" || hasAppliedBoardCardFilters
-                ? "border-white/14 bg-white/8 text-white"
-                : "",
-            )}
-          >
-            <Filter className="h-4 w-4" />
-            <span>Filter</span>
-          </button>
+          <div ref={filterPanelRef} className="relative">
+            <button
+              type="button"
+              aria-label="Filter"
+              onClick={() =>
+                setOpenPanel((current) =>
+                  current === "filters" ? null : "filters",
+                )
+              }
+              className={cn(
+                "ui-pressed-button relative flex h-8 items-center gap-2 rounded-[10px] border px-3 text-[13px] transition",
+                openPanel === "filters"
+                  ? "border-white/30 bg-white/10 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)]"
+                  : "",
+                hasAppliedBoardCardFilters
+                  ? "border-white/30 bg-white/10 text-white"
+                  : "",
+              )}
+            >
+              <Filter
+                className={cn(
+                  "h-4 w-4",
+                  hasAppliedBoardCardFilters || openPanel === "filters"
+                    ? "text-white"
+                    : "",
+                )}
+              />
+              <span>Filter</span>
+              {hasAppliedBoardCardFilters ? (
+                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-[#0f0f10] bg-white" />
+              ) : null}
+            </button>
+
+            {openPanel === "filters" ? (
+              <BoardFilterPopover
+                appliedFilters={boardFilters}
+                boardLabels={boardLabels}
+                boardLists={boardLists}
+                boardMembers={boardMembers}
+                onApply={(filters) => {
+                  onApplyBoardFilters(filters);
+                  setOpenPanel(null);
+                }}
+                onClose={() => setOpenPanel(null)}
+              />
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -305,19 +338,6 @@ export function DashboardTopbar({
         ) : null}
 
         {openPanel === "notifications" ? <BoardNotificationsPopover /> : null}
-
-        {openPanel === "filters" ? (
-          <BoardFilterPopover
-            appliedFilters={boardFilters}
-            boardLabels={boardLabels}
-            boardLists={boardLists}
-            boardMembers={boardMembers}
-            onApply={(filters) => {
-              onApplyBoardFilters(filters);
-              setOpenPanel(null);
-            }}
-          />
-        ) : null}
       </div>
     </header>
   );

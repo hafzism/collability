@@ -43,10 +43,18 @@ import {
   getCardActivity,
   getCardDetail,
   listCards,
+  searchBoardCards,
   moveCard as moveCardRequest,
   reorderCard,
   updateCard as updateCardRequest,
 } from "@/lib/cards";
+import {
+  EMPTY_BOARD_CARD_FILTERS,
+  hasAppliedBoardCardFilters,
+  normalizeBoardCardFilters,
+  serializeBoardCardFilters,
+  type BoardCardFilters,
+} from "@/lib/board-card-filters";
 import {
   createList,
   deleteList,
@@ -105,6 +113,10 @@ export function useDashboardShell(user: AuthUser) {
   const cardDetailModalStateRef = useRef<CardDetailModalState | null>(null);
   const [boardPresence, setBoardPresence] =
     useState<BoardPresenceSnapshot | null>(null);
+  const [boardSearchText, setBoardSearchText] = useState("");
+  const [debouncedBoardSearchText, setDebouncedBoardSearchText] = useState("");
+  const [appliedBoardCardFilters, setAppliedBoardCardFilters] =
+    useState<BoardCardFilters>(EMPTY_BOARD_CARD_FILTERS);
   const queryClient = useQueryClient();
   const activeBoardId = useDashboardUiStore((state) => state.activeBoardId);
   const activeWorkspaceId = useDashboardUiStore((state) => state.activeWorkspaceId);
@@ -265,20 +277,83 @@ export function useDashboardShell(user: AuthUser) {
     [activeBoardListsQuery.data],
   );
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedBoardSearchText(boardSearchText.trim());
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [boardSearchText]);
+
+  useEffect(() => {
+    setBoardSearchText("");
+    setDebouncedBoardSearchText("");
+    setAppliedBoardCardFilters(EMPTY_BOARD_CARD_FILTERS);
+  }, [activeBoardId]);
+
+  const normalizedBoardCardFilters = useMemo(
+    () => normalizeBoardCardFilters(appliedBoardCardFilters),
+    [appliedBoardCardFilters],
+  );
+  const hasAppliedBoardCardFiltersState = useMemo(
+    () => hasAppliedBoardCardFilters(normalizedBoardCardFilters),
+    [normalizedBoardCardFilters],
+  );
+  const boardCardSearchKey = useMemo(
+    () =>
+      JSON.stringify({
+        query: debouncedBoardSearchText,
+        filters: serializeBoardCardFilters(normalizedBoardCardFilters),
+      }),
+    [debouncedBoardSearchText, normalizedBoardCardFilters],
+  );
+  const hasActiveBoardCardSearch = Boolean(
+    debouncedBoardSearchText || hasAppliedBoardCardFiltersState,
+  );
+
   const cardListQueries = useQueries({
     queries: activeBoardLists.map((list) => ({
       queryKey: dashboardQueryKeys.cards.list(activeBoardId, list.id),
       queryFn: () => listCards(activeBoardId, list.id),
-      enabled: Boolean(activeBoardId),
+      enabled: Boolean(activeBoardId) && !hasActiveBoardCardSearch,
     })),
   });
 
+  const boardCardSearchQuery = useQuery({
+    queryKey: dashboardQueryKeys.cards.search(activeBoardId, boardCardSearchKey),
+    queryFn: () =>
+      searchBoardCards(activeBoardId, {
+        query: debouncedBoardSearchText,
+        filters: normalizedBoardCardFilters,
+      }),
+    enabled: Boolean(activeBoardId) && hasActiveBoardCardSearch,
+  });
+
   const cardsByListId = useMemo<Record<string, BoardCard[]>>(
-    () =>
-      Object.fromEntries(
+    () => {
+      if (hasActiveBoardCardSearch) {
+        const searchCards = boardCardSearchQuery.data ?? [];
+        const searchCardsByListId = searchCards.reduce<Record<string, BoardCard[]>>(
+          (groups, card) => {
+            groups[card.listId] ??= [];
+            groups[card.listId].push(card);
+            return groups;
+          },
+          {},
+        );
+
+        return Object.fromEntries(
+          activeBoardLists.map((list) => [list.id, searchCardsByListId[list.id] ?? []]),
+        );
+      }
+
+      return Object.fromEntries(
         activeBoardLists.map((list, index) => [list.id, cardListQueries[index]?.data ?? []]),
-      ),
-    [activeBoardLists, cardListQueries],
+      );
+    },
+    [activeBoardLists, boardCardSearchQuery.data, cardListQueries, hasActiveBoardCardSearch],
   );
 
   const workspaceDetailsQuery = useQuery({
@@ -391,6 +466,7 @@ export function useDashboardShell(user: AuthUser) {
       boardsQuery.error ??
       activeBoardDetailQuery.error ??
       activeBoardListsQuery.error ??
+      boardCardSearchQuery.error ??
       cardListQueries.find((query) => query.error)?.error;
 
     return firstError
@@ -399,6 +475,7 @@ export function useDashboardShell(user: AuthUser) {
   }, [
     activeBoardDetailQuery.error,
     activeBoardListsQuery.error,
+    boardCardSearchQuery.error,
     boardsQuery.error,
     cardListQueries,
     workspacesQuery.error,
@@ -580,6 +657,10 @@ export function useDashboardShell(user: AuthUser) {
           queryKey: dashboardQueryKeys.cards.list(event.boardId, listId),
         });
       }
+
+      void queryClient.invalidateQueries({
+        queryKey: dashboardQueryKeys.cards.searchRoot(event.boardId),
+      });
 
       const currentCardDetailModalState = cardDetailModalStateRef.current;
 
@@ -1256,6 +1337,8 @@ export function useDashboardShell(user: AuthUser) {
     activeBoards,
     activeWorkspace,
     boardActivityById,
+    boardCardFilters: normalizedBoardCardFilters,
+    boardSearchText,
     boardCreationWorkspaceDetail: boardCreationWorkspaceDetailQuery.data ?? null,
     boardManagementWorkspaceDetail:
       boardManagementWorkspaceDetailQuery.data ?? null,
@@ -1304,6 +1387,9 @@ export function useDashboardShell(user: AuthUser) {
     isJoinWorkspaceModalOpen,
     isSidebarOpen,
     isWorkspaceMenuOpen,
+    hasAppliedBoardCardFilters: hasAppliedBoardCardFiltersState,
+    setAppliedBoardCardFilters,
+    setBoardSearchText,
     setCardDetailModalState,
     setCreateListRequestId,
     setIsAccountMenuOpen,

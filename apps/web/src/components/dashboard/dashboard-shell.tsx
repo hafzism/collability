@@ -85,13 +85,20 @@ export function DashboardShell({
                     [])
                   : []
               }
+              boardFilters={dashboard.boardCardFilters}
+              boardLabels={dashboard.activeBoardDetail?.labels ?? []}
+              boardLists={dashboard.activeBoardLists}
               boardName={dashboard.activeBoard?.title ?? "Boards"}
+              boardSearchText={dashboard.boardSearchText}
               boardMembers={dashboard.activeBoardDetail?.members ?? []}
               boardPresence={dashboard.boardPresence}
               canManageBoard={
                 dashboard.activeBoardDetail?.currentUserBoardRole === "MANAGER"
               }
               currentUserId={user.id}
+              hasAppliedBoardCardFilters={
+                dashboard.hasAppliedBoardCardFilters
+              }
               isSidebarOpen={dashboard.isSidebarOpen}
               onCreateList={() => {
                 if (
@@ -104,6 +111,8 @@ export function DashboardShell({
 
                 dashboard.setCreateListRequestId((current) => current + 1);
               }}
+              onApplyBoardFilters={dashboard.setAppliedBoardCardFilters}
+              onBoardSearchChange={dashboard.setBoardSearchText}
               onOpenBoardActivity={() => {
                 if (!dashboard.activeBoard) {
                   return;

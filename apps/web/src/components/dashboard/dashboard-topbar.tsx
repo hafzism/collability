@@ -13,40 +13,61 @@ import {
   Settings2,
 } from "lucide-react";
 
+import type { BoardCardFilters } from "@/lib/board-card-filters";
 import type { BoardPresenceSnapshot } from "@/lib/board-presence";
 import { cn } from "@/lib/utils";
 import { BoardActivityPopover } from "./board-activity-popover";
+import { BoardFilterPopover } from "./board-filter-popover";
 import { BoardMembersPopover } from "./board-members-popover";
 import { BoardNotificationsPopover } from "./board-notifications-popover";
-import type { BoardActivityItem, BoardMember } from "./board-types";
+import type {
+  BoardActivityItem,
+  BoardLabel,
+  BoardList,
+  BoardMember,
+} from "./board-types";
 import { getAvatarFallback } from "./workspace-utils";
 
 type DashboardTopbarProps = {
   activityItems: BoardActivityItem[];
+  boardFilters: BoardCardFilters;
+  boardLabels: BoardLabel[];
+  boardLists: BoardList[];
   boardName: string;
   boardMembers: BoardMember[];
   boardPresence: BoardPresenceSnapshot | null;
   canManageBoard: boolean;
   currentUserId: string;
+  hasAppliedBoardCardFilters: boolean;
   isSidebarOpen: boolean;
   onCreateList: () => void;
+  onApplyBoardFilters: (filters: BoardCardFilters) => void;
+  onBoardSearchChange: (value: string) => void;
   onOpenBoardActivity: () => void;
   onOpenBoardMembers: () => void;
   onOpenBoardSettings: () => void;
   onToggleSidebar: () => void;
+  boardSearchText: string;
 };
 
-type OpenPanel = "members" | "activity" | "notifications" | null;
+type OpenPanel = "members" | "activity" | "notifications" | "filters" | null;
 
 export function DashboardTopbar({
   activityItems,
+  boardFilters,
+  boardLabels,
+  boardLists,
   boardName,
+  boardSearchText,
   boardMembers,
   boardPresence,
   canManageBoard,
   currentUserId,
+  hasAppliedBoardCardFilters,
   isSidebarOpen,
   onCreateList,
+  onApplyBoardFilters,
+  onBoardSearchChange,
   onOpenBoardActivity,
   onOpenBoardMembers,
   onOpenBoardSettings,
@@ -157,7 +178,9 @@ export function DashboardTopbar({
             <Search className="h-4 w-4 shrink-0" />
             <input
               type="text"
-              placeholder="Search"
+              value={boardSearchText}
+              onChange={(event) => onBoardSearchChange(event.target.value)}
+              placeholder="Search titles and descriptions"
               className="w-full bg-transparent text-[13px] text-[#ededeb] outline-none placeholder:text-[#6f6f6f]"
             />
           </label>
@@ -165,7 +188,17 @@ export function DashboardTopbar({
           <button
             type="button"
             aria-label="Filter"
-            className="ui-pressed-button flex h-8 items-center gap-2 rounded-[10px] border px-3 text-[13px] transition"
+            onClick={() =>
+              setOpenPanel((current) =>
+                current === "filters" ? null : "filters",
+              )
+            }
+            className={cn(
+              "ui-pressed-button flex h-8 items-center gap-2 rounded-[10px] border px-3 text-[13px] transition",
+              openPanel === "filters" || hasAppliedBoardCardFilters
+                ? "border-white/14 bg-white/8 text-white"
+                : "",
+            )}
           >
             <Filter className="h-4 w-4" />
             <span>Filter</span>
@@ -272,6 +305,19 @@ export function DashboardTopbar({
         ) : null}
 
         {openPanel === "notifications" ? <BoardNotificationsPopover /> : null}
+
+        {openPanel === "filters" ? (
+          <BoardFilterPopover
+            appliedFilters={boardFilters}
+            boardLabels={boardLabels}
+            boardLists={boardLists}
+            boardMembers={boardMembers}
+            onApply={(filters) => {
+              onApplyBoardFilters(filters);
+              setOpenPanel(null);
+            }}
+          />
+        ) : null}
       </div>
     </header>
   );

@@ -269,4 +269,61 @@ describe('CardsService', () => {
       }),
     );
   });
+
+  it('replaces due-date reminders when an assigned card due date changes', async () => {
+    const newDueDate = new Date('2026-06-20T10:00:00.000Z');
+    prismaService.list = {
+      findUnique: jest.fn().mockResolvedValue({ id: 'list-1', boardId: 'board-1' }),
+    };
+    prismaService.card.findFirst.mockResolvedValue({
+      id: 'card-1',
+      title: 'Ship reminders',
+      description: null,
+      dueDate: null,
+      assignees: [
+        {
+          userId: 'user-2',
+          user: {
+            name: 'Aaray',
+          },
+        },
+      ],
+      labels: [],
+    });
+    prismaService.card.update = jest.fn().mockResolvedValue({ id: 'card-1' });
+    prismaService.card.findUnique = jest.fn().mockResolvedValue({
+      id: 'card-1',
+      title: 'Ship reminders',
+      dueDate: newDueDate,
+      assignees: [
+        {
+          userId: 'user-2',
+          user: {
+            name: 'Aaray',
+          },
+        },
+      ],
+      labels: [],
+      list: {
+        title: 'Doing',
+      },
+    });
+    prismaService.board = {
+      findUnique: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+    };
+
+    await service.updateCard('board-1', 'list-1', 'card-1', 'user-1', {
+      dueDate: newDueDate,
+    });
+
+    expect(notificationsService.replaceCardDueDateReminders).toHaveBeenCalledWith(
+      prismaService,
+      {
+        boardId: 'board-1',
+        cardId: 'card-1',
+        dueDate: newDueDate,
+        assigneeIds: ['user-2'],
+      },
+    );
+  });
 });

@@ -14,9 +14,18 @@ describe('NotificationsService', () => {
       updateMany: jest.fn(),
     },
     boardNotificationSetting: {
+      findMany: jest.fn(),
       findUnique: jest.fn(),
       upsert: jest.fn(),
     },
+    dueDateReminder: {
+      createMany: jest.fn(),
+      deleteMany: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    $transaction: jest.fn(),
   };
 
   const boardEventsService = {
@@ -25,6 +34,10 @@ describe('NotificationsService', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    prismaService.$transaction.mockImplementation(
+      async (callback: (tx: typeof prismaService) => Promise<unknown>) =>
+        callback(prismaService as any),
+    );
     service = new NotificationsService(
       prismaService as any,
       boardEventsService as any,
@@ -180,6 +193,122 @@ describe('NotificationsService', () => {
       update: {
         emailEnabled: true,
         dueReminderMinutes: [60, 1440],
+      },
+    });
+  });
+
+  it('replaces pending due-date reminders for card assignees', async () => {
+    jest.useFakeTimers().setSystemTime(
+      new Date('2026-06-14T10:00:00.000Z'),
+    );
+    prismaService.boardNotificationSetting.findMany.mockResolvedValue([
+      {
+        userId: 'user-1',
+        inAppEnabled: true,
+        mutedAt: null,
+        dueReminderMinutes: [60, 1440],
+      },
+      {
+        userId: 'user-2',
+        inAppEnabled: true,
+        mutedAt: null,
+        dueReminderMinutes: [60],
+      },
+    ]);
+    prismaService.dueDateReminder.createMany.mockResolvedValue({ count: 3 });
+
+    await service.replaceCardDueDateReminders(prismaService as any, {
+      boardId: 'board-1',
+      cardId: 'card-1',
+      dueDate: new Date('2026-06-15T10:00:00.000Z'),
+      assigneeIds: ['user-1', 'user-2'],
+    });
+
+    expect(prismaService.dueDateReminder.deleteMany).toHaveBeenCalledWith({
+      where: {
+        cardId: 'card-1',
+        status: 'PENDING',
+      },
+    });
+    expect(prismaService.dueDateReminder.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          boardId: 'board-1',
+          cardId: 'card-1',
+          userId: 'user-1',
+          dueDate: new Date('2026-06-15T10:00:00.000Z'),
+          remindAt: new Date('2026-06-15T09:00:00.000Z'),
+        },
+        {
+          boardId: 'board-1',
+          cardId: 'card-1',
+          userId: 'user-1',
+          dueDate: new Date('2026-06-15T10:00:00.000Z'),
+          remindAt: new Date('2026-06-14T10:00:00.000Z'),
+        },
+        {
+          boardId: 'board-1',
+          cardId: 'card-1',
+          userId: 'user-2',
+          dueDate: new Date('2026-06-15T10:00:00.000Z'),
+          remindAt: new Date('2026-06-15T09:00:00.000Z'),
+        },
+      ],
+      skipDuplicates: true,
+    });
+
+    jest.useRealTimers();
+  });
+
+  it('processes due reminders into board notifications', async () => {
+    const remindAt = new Date('2026-06-14T10:00:00.000Z');
+    prismaService.dueDateReminder.findMany.mockResolvedValue([
+      {
+        id: 'reminder-1',
+        boardId: 'board-1',
+        cardId: 'card-1',
+        userId: 'user-1',
+        dueDate: new Date('2026-06-14T12:00:00.000Z'),
+        remindAt,
+        card: {
+          title: 'Ship notifications',
+          dueDate: new Date('2026-06-14T12:00:00.000Z'),
+          assignees: [{ userId: 'user-1' }],
+        },
+      },
+    ]);
+    prismaService.dueDateReminder.updateMany.mockResolvedValue({ count: 1 });
+    prismaService.boardNotification.create.mockResolvedValue({
+      id: 'notification-1',
+      boardId: 'board-1',
+      userId: 'user-1',
+    });
+    prismaService.dueDateReminder.update.mockResolvedValue({
+      id: 'reminder-1',
+      status: 'SENT',
+    });
+
+    await service.processDueDateReminders(remindAt);
+
+    expect(prismaService.boardNotification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          boardId: 'board-1',
+          userId: 'user-1',
+          type: 'CARD_DUE_REMINDER',
+          entityType: 'card',
+          entityId: 'card-1',
+        }),
+      }),
+    );
+    expect(prismaService.dueDateReminder.update).toHaveBeenCalledWith({
+      where: {
+        id: 'reminder-1',
+      },
+      data: {
+        notificationId: 'notification-1',
+        status: 'SENT',
+        sentAt: expect.any(Date),
       },
     });
   });

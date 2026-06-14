@@ -611,6 +611,15 @@ export class CardsService {
         });
 
         if (dueDate) {
+          await this.notificationsService.replaceCardDueDateReminders(tx, {
+            boardId,
+            cardId: card.id,
+            dueDate,
+            assigneeIds: (createdCard?.assignees ?? []).map(
+              (assignee) => assignee.userId,
+            ),
+          });
+
           await this.logCardActivity(tx, {
             workspaceId: board.workspaceId,
             userId,
@@ -994,6 +1003,22 @@ export class CardsService {
           beforeLabels: card.labels,
           afterLabels: updatedCard?.labels ?? [],
         });
+
+        if (cardData.dueDate !== undefined || assigneeIds !== undefined) {
+          const dueDate = updatedCard?.dueDate ?? null;
+          if (dueDate) {
+            await this.notificationsService.replaceCardDueDateReminders(tx, {
+              boardId,
+              cardId,
+              dueDate,
+              assigneeIds: (updatedCard?.assignees ?? []).map(
+                (assignee) => assignee.userId,
+              ),
+            });
+          } else {
+            await this.notificationsService.cancelCardDueDateReminders(tx, cardId);
+          }
+        }
       }
 
       return tx.card.findUnique({

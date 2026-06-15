@@ -157,13 +157,3 @@ export type BoardNotification = {
     avatarUrl: string | null;
   } | null;
 };
-
-export type BoardNotificationSetting = {
-  id?: string;
-  boardId: string;
-  userId: string;
-  inAppEnabled: boolean;
-  emailEnabled: boolean;
-  dueReminderMinutes: number[];
-  mutedAt: string | null;
-};

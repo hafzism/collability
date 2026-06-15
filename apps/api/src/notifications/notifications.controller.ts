@@ -1,5 +1,4 @@
 import {
-  Body,
   Controller,
   Get,
   Param,
@@ -11,7 +10,6 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BoardGuard } from '../common/guards/board.guard';
 import type { AuthenticatedRequest } from '../common/interfaces/authenticated-request.interface';
-import { UpdateBoardNotificationSettingDto } from './dto/update-board-notification-setting.dto';
 import { NotificationsService } from './notifications.service';
 
 @Controller('boards/:boardId/notifications')
@@ -40,30 +38,6 @@ export class NotificationsController {
     return this.notificationsService.getUnreadBoardNotificationCount(
       boardId,
       req.user.id,
-    );
-  }
-
-  @Get('settings')
-  getBoardNotificationSetting(
-    @Req() req: AuthenticatedRequest,
-    @Param('boardId') boardId: string,
-  ) {
-    return this.notificationsService.getBoardNotificationSetting(
-      boardId,
-      req.user.id,
-    );
-  }
-
-  @Patch('settings')
-  updateBoardNotificationSetting(
-    @Req() req: AuthenticatedRequest,
-    @Param('boardId') boardId: string,
-    @Body() dto: UpdateBoardNotificationSettingDto,
-  ) {
-    return this.notificationsService.updateBoardNotificationSetting(
-      boardId,
-      req.user.id,
-      dto,
     );
   }
 

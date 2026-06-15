@@ -220,10 +220,6 @@ export function DashboardShell({
           }
           onClose={() => dashboard.setIsBoardSettingsModalOpen(false)}
           onDeleteBoard={dashboard.handleDeleteBoard}
-          notificationSetting={dashboard.boardNotificationSetting}
-          onUpdateNotificationSetting={
-            dashboard.handleUpdateBoardNotificationSetting
-          }
           onUpdateBoard={dashboard.handleUpdateBoard}
         />
       ) : null}

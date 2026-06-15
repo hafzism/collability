@@ -63,13 +63,10 @@ import {
   updateList,
 } from "@/lib/lists";
 import {
-  getBoardNotificationSetting,
   getBoardNotificationUnreadCount,
   listBoardNotifications,
   markAllBoardNotificationsRead,
   markBoardNotificationRead,
-  updateBoardNotificationSetting,
-  type UpdateBoardNotificationSettingInput,
 } from "@/lib/notifications";
 import {
   createWorkspace,
@@ -410,12 +407,6 @@ export function useDashboardShell(user: AuthUser) {
     enabled: Boolean(activeBoardId),
   });
 
-  const activeBoardNotificationSettingQuery = useQuery({
-    queryKey: dashboardQueryKeys.notifications.settings(activeBoardId),
-    queryFn: () => getBoardNotificationSetting(activeBoardId),
-    enabled: Boolean(activeBoardId),
-  });
-
   const activeCardDetailQuery = useQuery({
     queryKey: cardDetailModalState
       ? dashboardQueryKeys.cards.detail(
@@ -632,18 +623,6 @@ export function useDashboardShell(user: AuthUser) {
   async function handleMarkAllBoardNotificationsRead(boardId: string) {
     await markAllBoardNotificationsRead(boardId);
     await refreshBoardNotifications(boardId);
-  }
-
-  async function handleUpdateBoardNotificationSetting(
-    boardId: string,
-    input: UpdateBoardNotificationSettingInput,
-  ) {
-    const setting = await updateBoardNotificationSetting(boardId, input);
-    queryClient.setQueryData(
-      dashboardQueryKeys.notifications.settings(boardId),
-      setting,
-    );
-    return setting;
   }
 
   const emitBoardPresenceUpdate = useCallback(
@@ -1422,7 +1401,6 @@ export function useDashboardShell(user: AuthUser) {
     activeWorkspace,
     boardActivityById,
     boardCardFilters: normalizedBoardCardFilters,
-    boardNotificationSetting: activeBoardNotificationSettingQuery.data ?? null,
     boardNotifications: activeBoardNotificationsQuery.data ?? [],
     boardNotificationUnreadCount:
       activeBoardNotificationUnreadCountQuery.data?.unreadCount ?? 0,
@@ -1462,7 +1440,6 @@ export function useDashboardShell(user: AuthUser) {
     handleReorderList,
     handleSubmitBoardMembers,
     handleUpdateBoard,
-    handleUpdateBoardNotificationSetting,
     handleUpdateBoardMemberRole,
     handleUpdateCard,
     handleUpdateWorkspace,

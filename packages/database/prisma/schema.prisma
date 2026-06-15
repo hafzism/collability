@@ -67,7 +67,6 @@ model User {
   authSessions         AuthSession[]
   boardNotifications   BoardNotification[]        @relation("BoardNotificationRecipient")
   actedNotifications   BoardNotification[]        @relation("BoardNotificationActor")
-  notificationSettings BoardNotificationSetting[]
   dueDateReminders     DueDateReminder[]
 }
 
@@ -157,7 +156,6 @@ model Board {
   members BoardMember[]
   labels  Label[]
   notifications        BoardNotification[]
-  notificationSettings BoardNotificationSetting[]
   dueDateReminders     DueDateReminder[]
 }
 
@@ -313,23 +311,6 @@ model BoardNotification {
 
   @@index([boardId, userId, createdAt])
   @@index([userId, readAt, createdAt])
-}
-
-model BoardNotificationSetting {
-  id                 String   @id @default(cuid())
-  boardId            String
-  userId             String
-  inAppEnabled       Boolean  @default(true)
-  emailEnabled       Boolean  @default(false)
-  dueReminderMinutes Int[]    @default([1440])
-  mutedAt            DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([boardId, userId])
 }
 
 model DueDateReminder {

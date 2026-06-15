@@ -1,18 +1,8 @@
-import type {
-  BoardNotification,
-  BoardNotificationSetting,
-} from "@/components/dashboard/board-types";
+import type { BoardNotification } from "@/components/dashboard/board-types";
 import { apiRequest } from "./api-client";
 
 export type BoardNotificationUnreadCount = {
   unreadCount: number;
-};
-
-export type UpdateBoardNotificationSettingInput = {
-  inAppEnabled?: boolean;
-  emailEnabled?: boolean;
-  muted?: boolean;
-  dueReminderMinutes?: number[];
 };
 
 export function listBoardNotifications(boardId: string) {
@@ -50,28 +40,6 @@ export function markAllBoardNotificationsRead(boardId: string) {
     `/boards/${boardId}/notifications/read-all`,
     {
       method: "PATCH",
-    },
-  );
-}
-
-export function getBoardNotificationSetting(boardId: string) {
-  return apiRequest<BoardNotificationSetting>(
-    `/boards/${boardId}/notifications/settings`,
-    {
-      method: "GET",
-    },
-  );
-}
-
-export function updateBoardNotificationSetting(
-  boardId: string,
-  input: UpdateBoardNotificationSettingInput,
-) {
-  return apiRequest<BoardNotificationSetting>(
-    `/boards/${boardId}/notifications/settings`,
-    {
-      method: "PATCH",
-      body: input,
     },
   );
 }

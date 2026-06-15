@@ -21,8 +21,6 @@ export const dashboardQueryKeys = {
     list: (boardId: string) => ["boards", boardId, "notifications"] as const,
     unreadCount: (boardId: string) =>
       ["boards", boardId, "notifications", "unread-count"] as const,
-    settings: (boardId: string) =>
-      ["boards", boardId, "notifications", "settings"] as const,
   },
   cards: {
     searchRoot: (boardId: string) => ["boards", boardId, "cards", "search"] as const,

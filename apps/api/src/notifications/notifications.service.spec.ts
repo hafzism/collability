@@ -13,11 +13,6 @@ describe('NotificationsService', () => {
       update: jest.fn(),
       updateMany: jest.fn(),
     },
-    boardNotificationSetting: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      upsert: jest.fn(),
-    },
     dueDateReminder: {
       createMany: jest.fn(),
       deleteMany: jest.fn(),
@@ -134,93 +129,16 @@ describe('NotificationsService', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
-  it('returns default board notification settings when none exist', async () => {
-    prismaService.boardNotificationSetting.findUnique.mockResolvedValue(null);
-
-    await expect(
-      service.getBoardNotificationSetting('board-1', 'user-1'),
-    ).resolves.toEqual({
-      boardId: 'board-1',
-      userId: 'user-1',
-      inAppEnabled: true,
-      emailEnabled: false,
-      dueReminderMinutes: [1440],
-      mutedAt: null,
-    });
-  });
-
-  it('updates board notification settings', async () => {
-    prismaService.boardNotificationSetting.upsert.mockResolvedValue({
-      id: 'setting-1',
-      boardId: 'board-1',
-      userId: 'user-1',
-      inAppEnabled: true,
-      emailEnabled: true,
-      dueReminderMinutes: [60, 1440],
-      mutedAt: null,
-    });
-
-    await expect(
-      service.updateBoardNotificationSetting('board-1', 'user-1', {
-        emailEnabled: true,
-        dueReminderMinutes: [60, 1440],
-      }),
-    ).resolves.toEqual({
-      id: 'setting-1',
-      boardId: 'board-1',
-      userId: 'user-1',
-      inAppEnabled: true,
-      emailEnabled: true,
-      dueReminderMinutes: [60, 1440],
-      mutedAt: null,
-    });
-
-    expect(prismaService.boardNotificationSetting.upsert).toHaveBeenCalledWith({
-      where: {
-        boardId_userId: {
-          boardId: 'board-1',
-          userId: 'user-1',
-        },
-      },
-      create: {
-        boardId: 'board-1',
-        userId: 'user-1',
-        inAppEnabled: true,
-        emailEnabled: true,
-        dueReminderMinutes: [60, 1440],
-        mutedAt: null,
-      },
-      update: {
-        emailEnabled: true,
-        dueReminderMinutes: [60, 1440],
-      },
-    });
-  });
-
-  it('replaces pending due-date reminders for card assignees', async () => {
+  it('replaces pending due-date reminders with one same-day morning reminder per assignee', async () => {
     jest.useFakeTimers().setSystemTime(
       new Date('2026-06-14T10:00:00.000Z'),
     );
-    prismaService.boardNotificationSetting.findMany.mockResolvedValue([
-      {
-        userId: 'user-1',
-        inAppEnabled: true,
-        mutedAt: null,
-        dueReminderMinutes: [60, 1440],
-      },
-      {
-        userId: 'user-2',
-        inAppEnabled: true,
-        mutedAt: null,
-        dueReminderMinutes: [60],
-      },
-    ]);
-    prismaService.dueDateReminder.createMany.mockResolvedValue({ count: 3 });
+    prismaService.dueDateReminder.createMany.mockResolvedValue({ count: 2 });
 
     await service.replaceCardDueDateReminders(prismaService as any, {
       boardId: 'board-1',
       cardId: 'card-1',
-      dueDate: new Date('2026-06-15T10:00:00.000Z'),
+      dueDate: new Date('2026-06-15T18:30:00.000Z'),
       assigneeIds: ['user-1', 'user-2'],
     });
 
@@ -236,21 +154,14 @@ describe('NotificationsService', () => {
           boardId: 'board-1',
           cardId: 'card-1',
           userId: 'user-1',
-          dueDate: new Date('2026-06-15T10:00:00.000Z'),
+          dueDate: new Date('2026-06-15T18:30:00.000Z'),
           remindAt: new Date('2026-06-15T09:00:00.000Z'),
         },
         {
           boardId: 'board-1',
           cardId: 'card-1',
-          userId: 'user-1',
-          dueDate: new Date('2026-06-15T10:00:00.000Z'),
-          remindAt: new Date('2026-06-14T10:00:00.000Z'),
-        },
-        {
-          boardId: 'board-1',
-          cardId: 'card-1',
           userId: 'user-2',
-          dueDate: new Date('2026-06-15T10:00:00.000Z'),
+          dueDate: new Date('2026-06-15T18:30:00.000Z'),
           remindAt: new Date('2026-06-15T09:00:00.000Z'),
         },
       ],

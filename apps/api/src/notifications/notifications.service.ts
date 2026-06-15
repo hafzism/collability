@@ -8,8 +8,6 @@ import { Prisma, BoardNotificationType } from '@repo/database';
 import { PrismaService } from '../prisma/prisma.service';
 import { BoardEventsService } from '../realtime/board-events.service';
 
-export const DEFAULT_DUE_REMINDER_MINUTES = [1440];
-
 type NotificationTx = Prisma.TransactionClient | PrismaService;
 
 type BoardNotificationInput = {
@@ -24,12 +22,7 @@ type BoardNotificationInput = {
   metadata?: Record<string, unknown>;
 };
 
-type BoardNotificationSettingUpdate = {
-  inAppEnabled?: boolean;
-  emailEnabled?: boolean;
-  muted?: boolean;
-  dueReminderMinutes?: number[];
-};
+const DUE_DATE_REMINDER_HOUR_UTC = 9;
 
 @Injectable()
 export class NotificationsService implements OnModuleInit, OnModuleDestroy {
@@ -138,75 +131,11 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     return this.getUnreadBoardNotificationCount(boardId, userId);
   }
 
-  async getBoardNotificationSetting(boardId: string, userId: string) {
-    const setting = await this.prisma.boardNotificationSetting.findUnique({
-      where: {
-        boardId_userId: {
-          boardId,
-          userId,
-        },
-      },
-    });
-
-    return (
-      setting ?? {
-        boardId,
-        userId,
-        inAppEnabled: true,
-        emailEnabled: false,
-        dueReminderMinutes: DEFAULT_DUE_REMINDER_MINUTES,
-        mutedAt: null,
-      }
-    );
-  }
-
-  async updateBoardNotificationSetting(
-    boardId: string,
-    userId: string,
-    update: BoardNotificationSettingUpdate,
-  ) {
-    const data = this.getSettingUpdateData(update);
-    const createData = {
-      boardId,
-      userId,
-      inAppEnabled: update.inAppEnabled ?? true,
-      emailEnabled: update.emailEnabled ?? false,
-      dueReminderMinutes:
-        update.dueReminderMinutes ?? DEFAULT_DUE_REMINDER_MINUTES,
-      mutedAt:
-        update.muted === undefined ? null : update.muted ? new Date() : null,
-    };
-
-    return this.prisma.boardNotificationSetting.upsert({
-      where: {
-        boardId_userId: {
-          boardId,
-          userId,
-        },
-      },
-      create: createData,
-      update: data,
-    });
-  }
-
   async createBoardNotification(
     tx: NotificationTx,
     input: BoardNotificationInput,
   ) {
     if (input.actorUserId && input.actorUserId === input.userId) {
-      return null;
-    }
-
-    const setting = await tx.boardNotificationSetting.findUnique({
-      where: {
-        boardId_userId: {
-          boardId: input.boardId,
-          userId: input.userId,
-        },
-      },
-    });
-
-    if (setting && (!setting.inAppEnabled || setting.mutedAt)) {
       return null;
     }
 
@@ -263,40 +192,18 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const settings = await tx.boardNotificationSetting.findMany({
-      where: {
-        boardId: input.boardId,
-        userId: {
-          in: input.assigneeIds,
-        },
-      },
-    });
-    const settingsByUserId = new Map(
-      settings.map((setting) => [setting.userId, setting]),
-    );
     const now = new Date();
-    const reminderRows = input.assigneeIds.flatMap((userId) => {
-      const setting = settingsByUserId.get(userId);
-
-      if (setting && (!setting.inAppEnabled || setting.mutedAt)) {
-        return [];
-      }
-
-      const reminderMinutes =
-        setting?.dueReminderMinutes.length
-          ? setting.dueReminderMinutes
-          : DEFAULT_DUE_REMINDER_MINUTES;
-
-      return reminderMinutes
-        .map((minutes) => ({
-          boardId: input.boardId,
-          cardId: input.cardId,
-          userId,
-          dueDate: input.dueDate,
-          remindAt: new Date(input.dueDate.getTime() - minutes * 60 * 1000),
-        }))
-        .filter((row) => row.remindAt >= now);
-    });
+    const remindAt = this.getDueDateMorningReminderAt(input.dueDate);
+    const reminderRows =
+      remindAt >= now
+        ? input.assigneeIds.map((userId) => ({
+            boardId: input.boardId,
+            cardId: input.cardId,
+            userId,
+            dueDate: input.dueDate,
+            remindAt,
+          }))
+        : [];
 
     if (reminderRows.length === 0) {
       return;
@@ -402,30 +309,17 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private getSettingUpdateData(update: BoardNotificationSettingUpdate) {
-    const data: {
-      inAppEnabled?: boolean;
-      emailEnabled?: boolean;
-      dueReminderMinutes?: number[];
-      mutedAt?: Date | null;
-    } = {};
-
-    if (update.inAppEnabled !== undefined) {
-      data.inAppEnabled = update.inAppEnabled;
-    }
-
-    if (update.emailEnabled !== undefined) {
-      data.emailEnabled = update.emailEnabled;
-    }
-
-    if (update.dueReminderMinutes !== undefined) {
-      data.dueReminderMinutes = update.dueReminderMinutes;
-    }
-
-    if (update.muted !== undefined) {
-      data.mutedAt = update.muted ? new Date() : null;
-    }
-
-    return data;
+  private getDueDateMorningReminderAt(dueDate: Date) {
+    return new Date(
+      Date.UTC(
+        dueDate.getUTCFullYear(),
+        dueDate.getUTCMonth(),
+        dueDate.getUTCDate(),
+        DUE_DATE_REMINDER_HOUR_UTC,
+        0,
+        0,
+        0,
+      ),
+    );
   }
 }

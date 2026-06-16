@@ -18,6 +18,7 @@ import {
 export function BoardCardBody({
   boardId,
   card,
+  currentUserId,
   onOpenComments,
   onOpenDetails,
   className,
@@ -25,6 +26,7 @@ export function BoardCardBody({
 }: {
   boardId: string;
   card: BoardCard;
+  currentUserId: string;
   onOpenComments: CardActionHandler;
   onOpenDetails: CardActionHandler;
   className?: string;
@@ -32,6 +34,10 @@ export function BoardCardBody({
 }) {
   const hasEditors = Boolean(presence?.editors.length);
   const hasViewers = Boolean(presence?.viewers.length);
+  const hasRemotePresence = hasEditors || hasViewers;
+  const isAssignedToCurrentUser = card.assignees.some(
+    (assignee) => assignee.userId === currentUserId,
+  );
   const visiblePresenceUsers = presence?.editors.length
     ? presence.editors
     : (presence?.viewers ?? []);
@@ -40,11 +46,14 @@ export function BoardCardBody({
     <div
       className={cn(
         "rounded-[20px] border border-white/7 bg-[linear-gradient(180deg,#1a1a1b_0%,#141415_100%)] p-4 text-left shadow-[0_14px_34px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.03)] ring-1 ring-white/[0.02]",
-        hasEditors
-          ? "border-[#d8614c]/70 shadow-[0_18px_38px_rgba(216,97,76,0.12),0_14px_34px_rgba(0,0,0,0.26)] ring-[#d8614c]/20"
+        isAssignedToCurrentUser
+          ? "border-[#47d681]/70 shadow-[0_18px_38px_rgba(71,214,129,0.1),0_14px_34px_rgba(0,0,0,0.26)]"
           : "",
-        !hasEditors && hasViewers
-          ? "border-[#47d681]/60 shadow-[0_18px_38px_rgba(71,214,129,0.1),0_14px_34px_rgba(0,0,0,0.26)] ring-[#47d681]/20"
+        hasRemotePresence
+          ? "ring-[#a78bfa]/35 shadow-[0_18px_38px_rgba(167,139,250,0.14),0_14px_34px_rgba(0,0,0,0.26)]"
+          : "",
+        hasRemotePresence && !isAssignedToCurrentUser
+          ? "border-[#a78bfa]/65"
           : "",
         className,
       )}
@@ -105,7 +114,7 @@ export function BoardCardBody({
           <span
             className={cn(
               "truncate text-[10px]",
-              hasEditors ? "text-[#e18b7c]" : "text-[#7fe3a0]",
+              hasEditors ? "text-[#c4b5fd]" : "text-[#a78bfa]",
             )}
           >
             {hasEditors ? "Editing" : "Viewing"}
@@ -166,6 +175,7 @@ export function BoardCardBody({
 export function SortableCardItem({
   boardId,
   card,
+  currentUserId,
   canManageCards,
   onOpenComments,
   onOpenDetails,
@@ -173,6 +183,7 @@ export function SortableCardItem({
 }: {
   boardId: string;
   card: BoardCard;
+  currentUserId: string;
   canManageCards: boolean;
   onOpenComments: CardActionHandler;
   onOpenDetails: CardActionHandler;
@@ -212,6 +223,7 @@ export function SortableCardItem({
       <BoardCardBody
         boardId={boardId}
         card={card}
+        currentUserId={currentUserId}
         onOpenComments={onOpenComments}
         onOpenDetails={onOpenDetails}
         presence={presence}

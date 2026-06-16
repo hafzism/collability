@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev
+      - main
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://user:password@localhost:5432/collability?schema=public
+      WEB_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      JWT_SECRET: test-access-secret
+      JWT_EXPIRES_IN: 15m
+      REFRESH_TOKEN_SECRET: test-refresh-secret
+      REFRESH_TOKEN_EXPIRES_IN: 7d
+      REFRESH_TOKEN_TTL_MS: 604800000
+      OTP_EXPIRES_MINUTES: 10
+      OTP_VERIFICATION_SECRET: test-otp-secret
+      OTP_VERIFICATION_EXPIRES_IN: 30m
+      SMTP_HOST: smtp.example.com
+      SMTP_PORT: 587
+      SMTP_USER: test
+      SMTP_PASS: test
+      SMTP_FROM: no-reply@example.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate database client
+        run: pnpm --dir packages/database generate
+
+      - name: Build database package
+        run: pnpm --dir packages/database build
+
+      - name: Run API tests
+        run: pnpm --dir apps/api test
+
+      - name: Build API
+        run: pnpm --dir apps/api build
+
+      - name: Lint web
+        run: pnpm --dir apps/web lint
+
+      - name: Build web
+        run: pnpm --dir apps/web build

@@ -3,6 +3,7 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 // Allow BigInt values to be serialized in JSON responses
@@ -24,7 +25,21 @@ async function bootstrap() {
   const cookieParserFactory = cookieParser as unknown as () => Parameters<
     typeof app.use
   >[0];
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: {
+        policy: 'cross-origin',
+      },
+    }),
+  );
   app.use(cookieParserFactory());
+  app.useBodyParser('json', {
+    limit: process.env.API_JSON_BODY_LIMIT ?? '1mb',
+  });
+  app.useBodyParser('urlencoded', {
+    extended: true,
+    limit: process.env.API_URLENCODED_BODY_LIMIT ?? '1mb',
+  });
   app.enableCors({
     origin: webAppUrl,
     credentials: true,

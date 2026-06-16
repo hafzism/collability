@@ -128,3 +128,32 @@ export type BoardCardActivityItem = {
   label: string;
   timestamp: string;
 };
+
+export type BoardNotificationType =
+  | "CARD_ASSIGNED"
+  | "CARD_UNASSIGNED"
+  | "CARD_COMMENTED"
+  | "CARD_DUE_REMINDER"
+  | "BOARD_MEMBER_ADDED"
+  | "BOARD_ROLE_CHANGED";
+
+export type BoardNotification = {
+  id: string;
+  boardId: string;
+  userId: string;
+  actorUserId: string | null;
+  type: BoardNotificationType;
+  title: string;
+  body: string;
+  entityType: string | null;
+  entityId: string | null;
+  metadata: Record<string, unknown> | null;
+  readAt: string | null;
+  createdAt: string;
+  actor: {
+    id: string;
+    email: string;
+    name: string;
+    avatarUrl: string | null;
+  } | null;
+};

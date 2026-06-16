@@ -5,11 +5,17 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Board, BoardMember, Label } from '@repo/database';
+import {
+  Board,
+  BoardMember,
+  BoardNotificationType,
+  Label,
+} from '@repo/database';
 import { BoardRole } from '../common/enums/board-role.enum';
 import { WorkspaceRole } from '../common/enums/workspace-role.enum';
 import sanitizeHtml from 'sanitize-html';
 import { ActivityService } from '../activity/activity.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const sanitize = (value: string) =>
   sanitizeHtml(value, { allowedTags: [], allowedAttributes: {} });
@@ -19,6 +25,7 @@ export class BoardsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityService: ActivityService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async logBoardActivity(
@@ -189,6 +196,21 @@ export class BoardsService {
             role: membership.role,
           },
         });
+        await this.notificationsService.createBoardNotification(tx, {
+          boardId,
+          userId,
+          actorUserId,
+          type: BoardNotificationType.BOARD_MEMBER_ADDED,
+          title: 'Added to a board',
+          body: `You were added to "${board.title}" as ${membership.role.toLowerCase()}`,
+          entityType: 'board',
+          entityId: boardId,
+          metadata: {
+            boardId,
+            boardTitle: board.title,
+            role: membership.role,
+          },
+        });
 
         return membership;
       });
@@ -252,6 +274,22 @@ export class BoardsService {
         metadata: {
           targetUserId: userId,
           targetUserName: existingMembership.user.name,
+          oldRole: existingMembership.role,
+          newRole: role,
+        },
+      });
+      await this.notificationsService.createBoardNotification(tx, {
+        boardId,
+        userId,
+        actorUserId,
+        type: BoardNotificationType.BOARD_ROLE_CHANGED,
+        title: 'Board role changed',
+        body: `Your role on "${board.title}" changed to ${role.toLowerCase()}`,
+        entityType: 'board',
+        entityId: boardId,
+        metadata: {
+          boardId,
+          boardTitle: board.title,
           oldRole: existingMembership.role,
           newRole: role,
         },

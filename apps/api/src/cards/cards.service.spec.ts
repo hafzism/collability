@@ -1,4 +1,5 @@
 import { CardsService } from './cards.service';
+import { BoardNotificationType } from '@repo/database';
 
 describe('CardsService', () => {
   let service: CardsService;
@@ -6,6 +7,7 @@ describe('CardsService', () => {
   const prismaService = {
     card: {
       delete: jest.fn(),
+      findMany: jest.fn(),
       findFirst: jest.fn(),
     },
     $transaction: jest.fn(),
@@ -19,6 +21,12 @@ describe('CardsService', () => {
     logBoardActivity: jest.fn(),
   };
 
+  const notificationsService = {
+    createBoardNotification: jest.fn(),
+    replaceCardDueDateReminders: jest.fn(),
+    cancelCardDueDateReminders: jest.fn(),
+  };
+
   beforeEach(() => {
     jest.resetAllMocks();
     prismaService.$transaction.mockImplementation(
@@ -27,10 +35,11 @@ describe('CardsService', () => {
     );
     activityService.log.mockResolvedValue(undefined);
     boardsService.logBoardActivity.mockResolvedValue(undefined);
-    service = new CardsService(
+    service = new (CardsService as any)(
       prismaService as any,
       activityService as any,
       boardsService as any,
+      notificationsService as any,
     );
   });
 
@@ -87,6 +96,286 @@ describe('CardsService', () => {
           cardTitle: 'Ship billing page',
         },
       },
+    );
+  });
+
+  it('searches board cards by keyword and relational filters', async () => {
+    prismaService.card.findMany.mockResolvedValue([{ id: 'card-1' }]);
+
+    await expect(
+      service.searchBoardCards('board-1', {
+        query: 'billing',
+        assigneeIds: ['user-1'],
+        labelIds: ['label-1'],
+        creatorIds: ['user-2'],
+        listIds: ['list-2'],
+      }),
+    ).resolves.toEqual([{ id: 'card-1' }]);
+
+    expect(prismaService.card.findMany).toHaveBeenCalledWith({
+      where: {
+        list: {
+          boardId: 'board-1',
+          id: {
+            in: ['list-2'],
+          },
+        },
+        createdBy: {
+          in: ['user-2'],
+        },
+        assignees: {
+          some: {
+            userId: {
+              in: ['user-1'],
+            },
+          },
+        },
+        labels: {
+          some: {
+            labelId: {
+              in: ['label-1'],
+            },
+          },
+        },
+        OR: [
+          {
+            title: {
+              contains: 'billing',
+              mode: 'insensitive',
+            },
+          },
+          {
+            description: {
+              contains: 'billing',
+              mode: 'insensitive',
+            },
+          },
+        ],
+      },
+      orderBy: [
+        {
+          list: {
+            position: 'asc',
+          },
+        },
+        {
+          position: 'asc',
+        },
+      ],
+      include: expect.any(Object),
+    });
+  });
+
+  it('applies overdue and unassigned board-card filters', async () => {
+    prismaService.card.findMany.mockResolvedValue([]);
+
+    const now = new Date('2026-06-14T12:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(now);
+
+    await service.searchBoardCards('board-1', {
+      dueState: 'overdue',
+      unassigned: true,
+      withoutDueDate: false,
+    });
+
+    expect(prismaService.card.findMany).toHaveBeenCalledWith({
+      where: {
+        list: {
+          boardId: 'board-1',
+        },
+        dueDate: {
+          lt: now,
+        },
+        assignees: {
+          none: {},
+        },
+      },
+      orderBy: [
+        {
+          list: {
+            position: 'asc',
+          },
+        },
+        {
+          position: 'asc',
+        },
+      ],
+      include: expect.any(Object),
+    });
+
+    jest.useRealTimers();
+  });
+
+  it('notifies newly assigned users when card assignees change', async () => {
+    prismaService.list = {
+      findUnique: jest.fn().mockResolvedValue({ id: 'list-1', boardId: 'board-1' }),
+    };
+    prismaService.card.findFirst.mockResolvedValue({
+      id: 'card-1',
+      title: 'Ship reminders',
+      description: null,
+      dueDate: null,
+      assignees: [],
+      labels: [],
+    });
+    prismaService.card.update = jest.fn().mockResolvedValue({ id: 'card-1' });
+    prismaService.card.findUnique = jest.fn().mockResolvedValue({
+      id: 'card-1',
+      title: 'Ship reminders',
+      assignees: [
+        {
+          userId: 'user-2',
+          user: {
+            name: 'Aaray',
+          },
+        },
+      ],
+      labels: [],
+      list: {
+        title: 'Doing',
+      },
+    });
+    prismaService.board = {
+      findUnique: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+    };
+    prismaService.boardMember = {
+      findMany: jest.fn().mockResolvedValue([{ userId: 'user-2' }]),
+    };
+    prismaService.cardAssignee = {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
+    };
+    prismaService.cardLabel = {
+      deleteMany: jest.fn(),
+      createMany: jest.fn(),
+    };
+    notificationsService.createBoardNotification.mockResolvedValue({
+      id: 'notification-1',
+    });
+
+    await service.updateCard('board-1', 'list-1', 'card-1', 'user-1', {
+      assigneeIds: ['user-2'],
+    });
+
+    expect(notificationsService.createBoardNotification).toHaveBeenCalledWith(
+      prismaService,
+      expect.objectContaining({
+        boardId: 'board-1',
+        userId: 'user-2',
+        actorUserId: 'user-1',
+        type: BoardNotificationType.CARD_ASSIGNED,
+        entityType: 'card',
+        entityId: 'card-1',
+      }),
+    );
+  });
+
+  it('replaces due-date reminders when an assigned card due date changes', async () => {
+    const newDueDate = new Date('2026-06-20T10:00:00.000Z');
+    prismaService.list = {
+      findUnique: jest.fn().mockResolvedValue({ id: 'list-1', boardId: 'board-1' }),
+    };
+    prismaService.card.findFirst.mockResolvedValue({
+      id: 'card-1',
+      title: 'Ship reminders',
+      description: null,
+      dueDate: null,
+      assignees: [
+        {
+          userId: 'user-2',
+          user: {
+            name: 'Aaray',
+          },
+        },
+      ],
+      labels: [],
+    });
+    prismaService.card.update = jest.fn().mockResolvedValue({ id: 'card-1' });
+    prismaService.card.findUnique = jest.fn().mockResolvedValue({
+      id: 'card-1',
+      title: 'Ship reminders',
+      dueDate: newDueDate,
+      assignees: [
+        {
+          userId: 'user-2',
+          user: {
+            name: 'Aaray',
+          },
+        },
+      ],
+      labels: [],
+      list: {
+        title: 'Doing',
+      },
+    });
+    prismaService.board = {
+      findUnique: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+    };
+
+    await service.updateCard('board-1', 'list-1', 'card-1', 'user-1', {
+      dueDate: newDueDate,
+    });
+
+    expect(notificationsService.replaceCardDueDateReminders).toHaveBeenCalledWith(
+      prismaService,
+      {
+        boardId: 'board-1',
+        cardId: 'card-1',
+        dueDate: newDueDate,
+        assigneeIds: ['user-2'],
+      },
+    );
+  });
+
+  it('notifies card assignees when a new comment is added', async () => {
+    prismaService.list = {
+      findUnique: jest.fn().mockResolvedValue({ id: 'list-1', boardId: 'board-1' }),
+    };
+    prismaService.card.findFirst.mockResolvedValue({
+      id: 'card-1',
+      title: 'Ship notifications',
+      list: {
+        board: {
+          workspaceId: 'workspace-1',
+        },
+      },
+      assignees: [
+        {
+          userId: 'user-2',
+          user: {
+            name: 'Aaray',
+          },
+        },
+      ],
+    });
+    prismaService.comment = {
+      create: jest.fn().mockResolvedValue({
+        id: 'comment-1',
+        cardId: 'card-1',
+      }),
+    };
+    notificationsService.createBoardNotification.mockResolvedValue({
+      id: 'notification-1',
+    });
+
+    await service.createComment(
+      'board-1',
+      'list-1',
+      'card-1',
+      'user-1',
+      'Looks good',
+    );
+
+    expect(notificationsService.createBoardNotification).toHaveBeenCalledWith(
+      prismaService,
+      expect.objectContaining({
+        boardId: 'board-1',
+        userId: 'user-2',
+        actorUserId: 'user-1',
+        type: BoardNotificationType.CARD_COMMENTED,
+        entityType: 'card',
+        entityId: 'card-1',
+      }),
     );
   });
 });

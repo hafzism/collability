@@ -6,11 +6,73 @@ import type {
   BoardCardComment,
   BoardCardDetail,
 } from "@/components/dashboard/board-types";
+import type {
+  BoardCardFilters,
+} from "./board-card-filters";
 
 export function listCards(boardId: string, listId: string) {
   return apiRequest<BoardCard[]>(`/boards/${boardId}/lists/${listId}/cards`, {
     method: "GET",
   });
+}
+
+export function searchBoardCards(
+  boardId: string,
+  input: {
+    query?: string;
+    filters: BoardCardFilters;
+  },
+) {
+  const searchParams = new URLSearchParams();
+  const trimmedQuery = input.query?.trim();
+
+  if (trimmedQuery) {
+    searchParams.set("q", trimmedQuery);
+  }
+
+  function appendMany(key: string, values: string[]) {
+    for (const value of values) {
+      searchParams.append(key, value);
+    }
+  }
+
+  appendMany("assigneeIds", input.filters.assigneeIds);
+  appendMany("labelIds", input.filters.labelIds);
+  appendMany("creatorIds", input.filters.creatorIds);
+  appendMany("listIds", input.filters.listIds);
+
+  if (input.filters.dueFrom) {
+    searchParams.set(
+      "dueFrom",
+      new Date(`${input.filters.dueFrom}T00:00:00.000`).toISOString(),
+    );
+  }
+
+  if (input.filters.dueTo) {
+    const endOfDay = new Date(`${input.filters.dueTo}T23:59:59.999`);
+    searchParams.set("dueTo", endOfDay.toISOString());
+  }
+
+  if (input.filters.dueState) {
+    searchParams.set("dueState", input.filters.dueState);
+  }
+
+  if (input.filters.unassigned) {
+    searchParams.set("unassigned", "true");
+  }
+
+  if (input.filters.withoutDueDate) {
+    searchParams.set("withoutDueDate", "true");
+  }
+
+  const queryString = searchParams.toString();
+
+  return apiRequest<BoardCard[]>(
+    `/boards/${boardId}/cards/search${queryString ? `?${queryString}` : ""}`,
+    {
+      method: "GET",
+    },
+  );
 }
 
 export function createCard(input: {

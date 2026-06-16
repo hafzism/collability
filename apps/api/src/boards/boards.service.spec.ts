@@ -1,4 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
+import { BoardNotificationType } from '@repo/database';
 import { BoardRole } from '../common/enums/board-role.enum';
 import { WorkspaceRole } from '../common/enums/workspace-role.enum';
 import { BoardsService } from './boards.service';
@@ -34,6 +35,10 @@ describe('BoardsService', () => {
     $transaction: jest.fn(),
   };
 
+  const notificationsService = {
+    createBoardNotification: jest.fn(),
+  };
+
   beforeEach(() => {
     jest.resetAllMocks();
     prismaService.$transaction.mockImplementation(
@@ -42,7 +47,11 @@ describe('BoardsService', () => {
     );
     activityService.log.mockResolvedValue(undefined);
     activityService.formatBoardActivity.mockReturnValue('formatted');
-    service = new BoardsService(prismaService as any, activityService as any);
+    service = new (BoardsService as any)(
+      prismaService as any,
+      activityService as any,
+      notificationsService as any,
+    );
   });
 
   it('creates the board creator as a manager', async () => {
@@ -153,6 +162,51 @@ describe('BoardsService', () => {
       userId: 'user-2',
       role: BoardRole.CONTRIBUTOR,
     });
+  });
+
+  it('notifies users when they are added to a board', async () => {
+    prismaService.board.findUnique.mockResolvedValue({
+      id: 'board-1',
+      title: 'Roadmap',
+      workspaceId: 'workspace-1',
+      createdBy: 'user-1',
+    });
+    prismaService.workspaceMember.findUnique.mockResolvedValue({
+      id: 'workspace-member-1',
+    });
+    prismaService.boardMember.findUnique.mockResolvedValue(null);
+    prismaService.boardMember.create.mockResolvedValue({
+      boardId: 'board-1',
+      userId: 'user-2',
+      role: BoardRole.CONTRIBUTOR,
+    });
+    prismaService.user = {
+      findUnique: jest.fn().mockResolvedValue({
+        name: 'Aaray',
+      }),
+    };
+    notificationsService.createBoardNotification.mockResolvedValue({
+      id: 'notification-1',
+    });
+
+    await service.addMember(
+      'board-1',
+      'user-2',
+      BoardRole.CONTRIBUTOR,
+      'user-1',
+    );
+
+    expect(notificationsService.createBoardNotification).toHaveBeenCalledWith(
+      prismaService,
+      expect.objectContaining({
+        boardId: 'board-1',
+        userId: 'user-2',
+        actorUserId: 'user-1',
+        type: BoardNotificationType.BOARD_MEMBER_ADDED,
+        entityType: 'board',
+        entityId: 'board-1',
+      }),
+    );
   });
 
   it('deletes boards instead of archiving them', async () => {

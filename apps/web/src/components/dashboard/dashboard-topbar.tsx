@@ -13,47 +13,83 @@ import {
   Settings2,
 } from "lucide-react";
 
+import type { BoardCardFilters } from "@/lib/board-card-filters";
 import type { BoardPresenceSnapshot } from "@/lib/board-presence";
 import { cn } from "@/lib/utils";
 import { BoardActivityPopover } from "./board-activity-popover";
+import { BoardFilterPopover } from "./board-filter-popover";
 import { BoardMembersPopover } from "./board-members-popover";
 import { BoardNotificationsPopover } from "./board-notifications-popover";
-import type { BoardActivityItem, BoardMember } from "./board-types";
+import type {
+  BoardActivityItem,
+  BoardLabel,
+  BoardList,
+  BoardMember,
+  BoardNotification,
+} from "./board-types";
 import { getAvatarFallback } from "./workspace-utils";
 
 type DashboardTopbarProps = {
   activityItems: BoardActivityItem[];
+  boardFilters: BoardCardFilters;
+  boardId: string;
+  boardLabels: BoardLabel[];
+  boardLists: BoardList[];
   boardName: string;
   boardMembers: BoardMember[];
+  boardNotifications: BoardNotification[];
+  boardNotificationUnreadCount: number;
   boardPresence: BoardPresenceSnapshot | null;
   canManageBoard: boolean;
   currentUserId: string;
+  hasAppliedBoardCardFilters: boolean;
   isSidebarOpen: boolean;
   onCreateList: () => void;
+  onApplyBoardFilters: (filters: BoardCardFilters) => void;
+  onBoardSearchChange: (value: string) => void;
   onOpenBoardActivity: () => void;
   onOpenBoardMembers: () => void;
   onOpenBoardSettings: () => void;
+  onMarkAllBoardNotificationsRead: (boardId: string) => Promise<void>;
+  onMarkBoardNotificationRead: (input: {
+    boardId: string;
+    notificationId: string;
+  }) => Promise<void>;
   onToggleSidebar: () => void;
+  boardSearchText: string;
 };
 
-type OpenPanel = "members" | "activity" | "notifications" | null;
+type OpenPanel = "members" | "activity" | "notifications" | "filters" | null;
 
 export function DashboardTopbar({
   activityItems,
+  boardFilters,
+  boardId,
+  boardLabels,
+  boardLists,
   boardName,
+  boardSearchText,
   boardMembers,
+  boardNotifications,
+  boardNotificationUnreadCount,
   boardPresence,
   canManageBoard,
   currentUserId,
+  hasAppliedBoardCardFilters,
   isSidebarOpen,
   onCreateList,
+  onApplyBoardFilters,
+  onBoardSearchChange,
   onOpenBoardActivity,
   onOpenBoardMembers,
   onOpenBoardSettings,
+  onMarkAllBoardNotificationsRead,
+  onMarkBoardNotificationRead,
   onToggleSidebar,
 }: DashboardTopbarProps) {
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const actionGroupRef = useRef<HTMLDivElement | null>(null);
+  const filterPanelRef = useRef<HTMLDivElement | null>(null);
   const onlineUserIds = useMemo(
     () => new Set((boardPresence?.users ?? []).map((user) => user.userId)),
     [boardPresence?.users],
@@ -83,6 +119,9 @@ export function DashboardTopbar({
       if (
         actionGroupRef.current &&
         !actionGroupRef.current.contains(event.target as Node)
+        &&
+        filterPanelRef.current &&
+        !filterPanelRef.current.contains(event.target as Node)
       ) {
         setOpenPanel(null);
       }
@@ -157,19 +196,60 @@ export function DashboardTopbar({
             <Search className="h-4 w-4 shrink-0" />
             <input
               type="text"
-              placeholder="Search"
+              value={boardSearchText}
+              onChange={(event) => onBoardSearchChange(event.target.value)}
+              placeholder="Search titles and descriptions"
               className="w-full bg-transparent text-[13px] text-[#ededeb] outline-none placeholder:text-[#6f6f6f]"
             />
           </label>
 
-          <button
-            type="button"
-            aria-label="Filter"
-            className="ui-pressed-button flex h-8 items-center gap-2 rounded-[10px] border px-3 text-[13px] transition"
-          >
-            <Filter className="h-4 w-4" />
-            <span>Filter</span>
-          </button>
+          <div ref={filterPanelRef} className="relative">
+            <button
+              type="button"
+              aria-label="Filter"
+              onClick={() =>
+                setOpenPanel((current) =>
+                  current === "filters" ? null : "filters",
+                )
+              }
+              className={cn(
+                "ui-pressed-button relative flex h-8 items-center gap-2 rounded-[10px] border px-3 text-[13px] transition",
+                openPanel === "filters"
+                  ? "border-white/30 bg-white/10 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06)]"
+                  : "",
+                hasAppliedBoardCardFilters
+                  ? "border-white/30 bg-white/10 text-white"
+                  : "",
+              )}
+            >
+              <Filter
+                className={cn(
+                  "h-4 w-4",
+                  hasAppliedBoardCardFilters || openPanel === "filters"
+                    ? "text-white"
+                    : "",
+                )}
+              />
+              <span>Filter</span>
+              {hasAppliedBoardCardFilters ? (
+                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-[#0f0f10] bg-white" />
+              ) : null}
+            </button>
+
+            {openPanel === "filters" ? (
+              <BoardFilterPopover
+                appliedFilters={boardFilters}
+                boardLabels={boardLabels}
+                boardLists={boardLists}
+                boardMembers={boardMembers}
+                onApply={(filters) => {
+                  onApplyBoardFilters(filters);
+                  setOpenPanel(null);
+                }}
+                onClose={() => setOpenPanel(null)}
+              />
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -242,13 +322,20 @@ export function DashboardTopbar({
             )
           }
           className={cn(
-            "ui-pressed-button rounded-[10px] border p-2 transition",
+            "ui-pressed-button relative rounded-[10px] border p-2 transition",
             openPanel === "notifications"
               ? "border-white/14 bg-white/8 text-white"
               : "",
           )}
         >
           <Bell className="h-4 w-4" />
+          {boardNotificationUnreadCount > 0 ? (
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full border border-[#111112] bg-[#f2f2ee] px-1 text-[9px] font-semibold leading-none text-[#111112]">
+              {boardNotificationUnreadCount > 9
+                ? "9+"
+                : boardNotificationUnreadCount}
+            </span>
+          ) : null}
         </button>
 
         {openPanel === "members" ? (
@@ -271,7 +358,15 @@ export function DashboardTopbar({
           />
         ) : null}
 
-        {openPanel === "notifications" ? <BoardNotificationsPopover /> : null}
+        {openPanel === "notifications" ? (
+          <BoardNotificationsPopover
+            boardId={boardId}
+            notifications={boardNotifications}
+            onMarkAllRead={onMarkAllBoardNotificationsRead}
+            onMarkRead={onMarkBoardNotificationRead}
+            unreadCount={boardNotificationUnreadCount}
+          />
+        ) : null}
       </div>
     </header>
   );

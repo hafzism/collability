@@ -60,6 +60,7 @@ export function BoardSettingsModal({
     normalizedTitle !== board.title ||
     normalizedDescription !== (board.description ?? "") ||
     visibility !== board.visibility;
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -114,7 +115,13 @@ export function BoardSettingsModal({
   return (
     <DashboardModal className="max-w-2xl" onClose={onClose}>
       <div className="relative">
-        <div className={cn(isConfirmingDelete ? "pointer-events-none opacity-30 blur-[1px]" : "")}>
+        <div
+          className={cn(
+            isConfirmingDelete
+              ? "pointer-events-none opacity-30 blur-[1px]"
+              : "",
+          )}
+        >
           <div className="flex items-start justify-between gap-4 pb-5">
             <div>
               <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-[#f5f5f3]">
@@ -162,7 +169,9 @@ export function BoardSettingsModal({
             </label>
 
             <div className="space-y-2">
-              <span className="text-sm font-medium text-[#ecece8]">Visibility</span>
+              <span className="text-sm font-medium text-[#ecece8]">
+                Visibility
+              </span>
               <div className="grid grid-cols-2 gap-2">
                 {(["WORKSPACE", "PRIVATE"] as const).map((option) => {
                   const isSelected = visibility === option;
@@ -200,7 +209,9 @@ export function BoardSettingsModal({
               </div>
             </div>
 
-            {titleError ? <p className="text-xs text-[#f07f6a]">{titleError}</p> : null}
+            {titleError ? (
+              <p className="text-xs text-[#f07f6a]">{titleError}</p>
+            ) : null}
             {actionError ? (
               <p className="text-xs text-[#f07f6a]">{actionError}</p>
             ) : null}

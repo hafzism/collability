@@ -7,6 +7,7 @@ import type {
   BoardPresenceSnapshot,
   BoardPresenceUpdate,
 } from "./board-presence";
+import type { BoardNotification } from "@/components/dashboard/board-types";
 
 export type BoardEventType =
   | "board.updated"
@@ -45,6 +46,7 @@ export type BoardRealtimeEvent = {
 type ServerToClientEvents = {
   "board:event": (event: BoardRealtimeEvent) => void;
   "board:presence": (snapshot: BoardPresenceSnapshot) => void;
+  "notification:created": (notification: BoardNotification) => void;
 };
 
 type ClientToServerEvents = {

@@ -371,6 +371,7 @@ function ListColumn({
                       key={card.id}
                       boardId={activeBoardId}
                       card={card}
+                      currentUserId={currentUserId}
                       canManageCards={canManageCards}
                       onOpenComments={onOpenCardComments}
                       onOpenDetails={onOpenCardDetails}
@@ -1243,6 +1244,7 @@ export function DashboardKanban({
             <BoardCardBody
               boardId={activeBoardId}
               card={activeCard}
+              currentUserId={currentUserId}
               onOpenComments={onOpenCardComments}
               onOpenDetails={onOpenCardDetails}
               className="w-[272px] shadow-[0_30px_90px_rgba(0,0,0,0.5)]"

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { resolve } from 'path';
@@ -25,13 +25,17 @@ import { NotificationsModule } from './notifications/notifications.module';
         resolve(process.cwd(), '../../.env'),
       ],
     }),
-    ThrottlerModule.forRoot([
-      {
-        name: 'global',
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => [
+        {
+          name: 'global',
+          ttl: Number(configService.get('API_RATE_LIMIT_TTL_MS') ?? 60000),
+          limit: Number(configService.get('API_RATE_LIMIT_MAX') ?? 100),
+        },
+      ],
+    }),
     PrismaModule,
     ActivityModule,
     UsersModule,

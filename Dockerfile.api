@@ -18,6 +18,7 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
 COPY . .
+ENV DATABASE_URL="postgresql://user:password@localhost:5432/collability_build"
 RUN pnpm --dir packages/database generate
 RUN pnpm --filter @repo/database build
 RUN pnpm --filter api build

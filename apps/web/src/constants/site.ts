@@ -1,7 +1,7 @@
 export const siteMetadata = {
-  title: "Collability | Real-time workspace",
+  title: "Collability | Team Kanban Workspace",
   description:
-    "A real-time collaborative team workspace combining Kanban boards and documents.",
+    "A realtime team workspace for Kanban boards, card comments, presence, notifications, and role-based collaboration.",
 } as const;
 
 export const brandName = "Collability";
@@ -14,8 +14,8 @@ export const primaryNavigationLinks = [
 
 export const mobileFeatureLinks = [
   { href: "/features/kanban", label: "Kanban Boards" },
-  { href: "/features/realtime", label: "Real-Time Collaboration" },
-  { href: "/features/offline", label: "Offline First" },
+  { href: "/features/realtime", label: "Realtime Board Updates" },
+  { href: "/features/notifications", label: "Notifications" },
 ] as const;
 
 export const footerLinkGroups = [

@@ -29,6 +29,7 @@ describe('AuthController', () => {
   beforeEach(async () => {
     jest.resetAllMocks();
     process.env.REFRESH_TOKEN_TTL_MS = '604800000';
+    delete process.env.REFRESH_TOKEN_COOKIE_DOMAIN;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
@@ -41,6 +42,17 @@ describe('AuthController', () => {
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
+  });
+
+  it('includes the configured refresh cookie domain for subdomain deployments', () => {
+    process.env.REFRESH_TOKEN_COOKIE_DOMAIN = '.example.com';
+
+    expect(getRefreshTokenCookieOptions()).toMatchObject({
+      domain: '.example.com',
+      httpOnly: true,
+      path: '/',
+      sameSite: 'lax',
+    });
   });
 
   it('sets the refresh cookie and returns the access token and user on register', async () => {

@@ -296,20 +296,6 @@ Nginx terminates TLS, proxies web traffic to port `3000`, proxies API traffic to
 
 ---
 
-## Portfolio Summary
-
-Collability demonstrates a production-ready full-stack collaboration workflow: authenticated workspaces, role-aware boards, drag-and-drop Kanban planning, realtime board events, card comments, member presence, notifications, and deployment automation.
-
-It highlights practical engineering across frontend state management, backend authorization, relational data modeling, realtime gateways, secure auth sessions, database migrations, containerization, and Linux/Nginx hosting.
-
----
-
-## Keywords
-
-Next.js, React, TypeScript, NestJS, PostgreSQL, Prisma, Socket.IO, Kanban, realtime collaboration, role-based access control, JWT authentication, refresh token rotation, OTP verification, TanStack Query, Zustand, Tailwind CSS, Docker, Docker Compose, Nginx, EC2 deployment, full-stack application, monorepo, Turborepo.
-
----
-
 ## License
 
 MIT

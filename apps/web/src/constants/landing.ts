@@ -1,14 +1,14 @@
 import {
   BellRing,
   Briefcase,
-  CloudUpload,
-  History,
+  CalendarClock,
   LayoutDashboard,
+  MessageSquareText,
+  Search,
   ShieldCheck,
-  Smartphone,
+  Tags,
   type LucideIcon,
   Users,
-  WifiOff,
 } from "lucide-react";
 
 export interface FeatureDefinition {
@@ -48,56 +48,56 @@ export const features: FeatureDefinition[] = [
   {
     title: "Flexible Kanban Boards",
     description:
-      "Create, organize, and drag-and-drop cards across lists seamlessly.",
+      "Create workspaces, boards, lists, and draggable cards for every project flow.",
     icon: LayoutDashboard,
   },
   {
-    title: "Real-Time Collaboration",
+    title: "Realtime Board Presence",
     description:
-      "CRDT-powered multi-user document editing with live presence tracking.",
+      "See active teammates, card viewers, editors, and comment typing states as work moves.",
     icon: Users,
   },
   {
-    title: "Offline First Architecture",
+    title: "Card Comments & Activity",
     description:
-      "Edits persist locally while offline and sync immediately upon reconnecting.",
-    icon: WifiOff,
+      "Keep decisions close to the task with card discussions and a complete activity trail.",
+    icon: MessageSquareText,
   },
   {
-    title: "Mobile App (Planned)",
+    title: "Search & Smart Filters",
     description:
-      "Manage your team's workflow seamlessly from anywhere on iOS and Android.",
-    icon: Smartphone,
+      "Find cards by keyword, assignee, label, due date, or unassigned status.",
+    icon: Search,
   },
   {
-    title: "Secure Payments",
+    title: "Secure Sessions",
     description:
-      "Enterprise-grade secure payment processing built for modern teams.",
+      "Email OTP signup, password login, JWT auth, refresh rotation, and session controls.",
     icon: ShieldCheck,
   },
   {
     title: "Built for Teams",
     description:
-      "Robust Role-Based Access Control (RBAC) and comprehensive activity audit logs.",
+      "Workspace roles, private boards, board member roles, and permission-aware actions.",
     icon: Briefcase,
   },
   {
-    title: "File Attachments",
+    title: "Labels & Due Dates",
     description:
-      "Integrated S3-compatible storage with signed URLs for secure and easy uploads.",
-    icon: CloudUpload,
+      "Classify cards with board labels, assign owners, and track upcoming deadlines.",
+    icon: Tags,
   },
   {
-    title: "Real-Time Notifications",
+    title: "Board Notifications",
     description:
-      "Instant in-app alerts and reliable asynchronous background email delivery.",
+      "Receive in-app alerts for assignments, comments, member changes, and reminders.",
     icon: BellRing,
   },
   {
-    title: "Snapshot Versioning",
+    title: "Due Reminder Pipeline",
     description:
-      "Automatic document snapshots allow you to safely restore previous states.",
-    icon: History,
+      "Track pending, sent, and canceled due-date reminders for assigned card owners.",
+    icon: CalendarClock,
   },
 ];
 
@@ -105,25 +105,25 @@ export const reviews: ReviewDefinition[] = [
   {
     name: "Alex Rivera",
     username: "@alex_pm",
-    body: "The real-time synchronization is magic. We've replaced three other tools with just one workspace.",
+    body: "The board updates and card discussions keep planning focused without bouncing between tools.",
     img: "https://avatar.vercel.sh/alex",
   },
   {
     name: "Sarah Chen",
     username: "@sarah_design",
-    body: "Finally, a tool that understands that documents and tasks belong together. Our productivity has doubled.",
+    body: "Private boards and clear roles make it easy to invite the right people into the right work.",
     img: "https://avatar.vercel.sh/sarah",
   },
   {
     name: "Marcus Thorne",
     username: "@marcus_ops",
-    body: "The offline mode is a life-saver for our field team. They can actually get work done without hunting for Wi-Fi.",
+    body: "Filters by assignee, label, and due date make daily standups much faster.",
     img: "https://avatar.vercel.sh/marcus",
   },
   {
     name: "Elena Vogt",
     username: "@elena_eng",
-    body: "Clean, fast, and reliable. Collability is the backbone of our remote-first culture.",
+    body: "Clean, fast, and reliable. The activity feed makes board changes easy to follow.",
     img: "https://avatar.vercel.sh/elena",
   },
   {
@@ -135,7 +135,7 @@ export const reviews: ReviewDefinition[] = [
   {
     name: "Julia Lopez",
     username: "@julia_founder",
-    body: "Moving from Notion and Trello was the best decision we made this year. It just feels more focused.",
+    body: "The workspace model, board roles, and notifications are exactly what our small team needed.",
     img: "https://avatar.vercel.sh/julia",
   },
 ];
@@ -144,32 +144,32 @@ export const faqs: FaqDefinition[] = [
   {
     question: "What exactly is Collability?",
     answer:
-      "Collability is a unified workspace that combines real-time document editing and hierarchical Kanban boards. It's designed to stop teams from toggling between too many apps by putting tasks and content in the same place.",
+      "Collability is a team workspace for planning projects with Kanban boards. It brings together workspaces, board permissions, draggable cards, card comments, activity history, presence, and notifications in one focused dashboard.",
   },
   {
-    question: "How does the real-time sync handle conflicts?",
+    question: "What realtime features are included?",
     answer:
-      "We use advanced CRDT algorithms. This means that if two people edit the same word at the same time, the system mathematically merges the changes without ever asking you to 'resolve a conflict.'",
+      "Board events are delivered over Socket.IO, so members can see list, card, comment, member, and notification changes without refreshing. Presence also shows active teammates, card viewers, editors, and users typing comments.",
   },
   {
-    question: "Is it really offline-first?",
+    question: "How are permissions handled?",
     answer:
-      "Yes. Unlike most cloud tools, Collability saves your entire workspace to a local database. You can keep editing while completely offline, and your changes will automatically push to the team when you're back on Wi-Fi.",
+      "Workspaces support owner, admin, member, and guest roles. Boards can be visible to the workspace or private, and board members can be managers, contributors, or viewers.",
   },
   {
     question: "Can we self-host Collability?",
     answer:
-      "Absolutely. We are open-source and provide a Docker image that you can deploy to your own private server in minutes. This is popular with privacy-conscious teams and government agencies.",
+      "Yes. The repository includes production Dockerfiles, Docker Compose, an Nginx reverse-proxy template, TLS-ready domain configuration, and an EC2 deployment script that runs Prisma migrations before restarting the stack.",
   },
   {
-    question: "Is there a limit on boards or documents?",
+    question: "How does signup work?",
     answer:
-      "The open-source version has no limits on data. Our cloud-hosted team plan provides unlimited storage, workspaces, and team members with no hidden caps.",
+      "New users verify their email with an OTP before creating an account. Login uses access tokens and rotating refresh-token sessions, with controls for viewing and revoking active sessions.",
   },
   {
-    question: "When is the mobile app coming out?",
+    question: "What can teams track on cards?",
     answer:
-      "The mobile version is currently in closed beta. It's built with the same offline-first sync engine and will be available for all users later this year.",
+      "Cards support descriptions, due dates, labels, assignees, comments, activity history, and board-wide search and filters.",
   },
 ];
 
@@ -182,7 +182,7 @@ export const howItWorksSteps: HowItWorksStep[] = [
   {
     title: "2. Add Members",
     description:
-      "Invite your team via email or shareable links and assign granular access roles.",
+      "Bring people into workspaces with join codes and assign clear workspace or board roles.",
   },
   {
     title: "3. Lists & Cards",
@@ -192,7 +192,7 @@ export const howItWorksSteps: HowItWorksStep[] = [
   {
     title: "4. Collaborate",
     description:
-      "Work together in absolute real-time. Edits sync instantly across devices.",
+      "Discuss cards, track activity, watch presence, and receive notifications as the board changes.",
   },
 ];
 
@@ -209,7 +209,7 @@ export const memberInvites: MemberInviteDefinition[] = [
   {
     initial: "B",
     name: "Bob",
-    role: "Editor",
+    role: "Contributor",
     avatarBg: "rgba(59,130,246,0.18)",
     avatarColor: "#93c5fd",
     badgeBg: "rgba(59,130,246,0.12)",
@@ -218,7 +218,7 @@ export const memberInvites: MemberInviteDefinition[] = [
   {
     initial: "C",
     name: "Carol",
-    role: "Viewer",
+    role: "Guest",
     avatarBg: "rgba(255,255,255,0.08)",
     avatarColor: "rgba(255,255,255,0.45)",
     badgeBg: "rgba(255,255,255,0.07)",

@@ -53,8 +53,8 @@ export function FeaturesSection() {
         Powerful Workflows Tailored to You
       </h2>
       <p className="mt-4 w-full max-w-2xl text-center text-lg tracking-tight text-muted-foreground">
-        Unlock seamless real-time collaboration, advanced access control, and
-        offline-first productivity—all with Collability’s team-focused features.
+        Plan projects with realtime board updates, role-aware workspaces, card
+        comments, labels, reminders, and team-focused notifications.
       </p>
       <div className="relative z-10 mx-auto mt-10 grid max-w-7xl grid-cols-1 py-10 max-sm:mx-0 max-sm:w-full max-sm:p-0 sm:grid-cols-2 lg:grid-cols-3">
         {features.map((feature, index) => (

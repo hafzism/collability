@@ -1,276 +1,312 @@
 # Collability
 
-> A real-time collaborative team workspace — combining the best of Kanban boards, collaborative documents, and modern team tooling.
+Collability is a production-style team workspace for planning work in shared Kanban boards. It combines workspace management, board-level access control, draggable lists and cards, card discussions, realtime board activity, and in-app notifications in a full-stack TypeScript monorepo.
 
-Collability demonstrates how to build a production-grade collaboration system with CRDT-based real-time editing, offline-first synchronization, and a relational metadata layer. It simulates the architecture behind tools like Notion, Trello, and Figma — practical, scalable, and built for real teams.
-
----
-
-## Demo
-
-> _Screenshots and GIFs coming soon._
-
-Planned previews:
-- Board with lists and cards
-- Real-time collaborative card description editing
-- Live presence indicators
-- Drag-and-drop card ordering
+The project is built as a realistic collaboration product: a Next.js web app, a NestJS API, PostgreSQL persistence through Prisma, Socket.IO realtime updates, containerized production builds, and an Nginx reverse-proxy setup for EC2-style hosting.
 
 ---
 
-## Features
+## Screenshots
 
-### Workspace & Collaboration
-- Workspaces with multiple boards
-- Board → Lists → Cards hierarchy
-- Role-based access control (Admin / Member / Guest)
-- Activity history and audit logs
+> Add screenshots or GIFs here after capturing the deployed app.
 
-### Kanban Board
-- Create, edit, move, and delete cards
-- Drag-and-drop ordering
-- User assignments, due dates, and checklists
+| Landing Page             | Dashboard                |
+| ------------------------ | ------------------------ |
+| _Screenshot coming soon_ | _Screenshot coming soon_ |
 
-### Real-Time Collaboration
-- Multi-user editing of card descriptions
-- Live presence indicators and cursor awareness
-- Automatic conflict resolution via CRDT synchronization
+| Board View               | Card Detail              |
+| ------------------------ | ------------------------ |
+| _Screenshot coming soon_ | _Screenshot coming soon_ |
 
-### Offline First
-- Edits persist locally while offline
-- Changes sync automatically when connection is restored
-- Collaborative editing works even on unstable connections
+---
+
+## Highlights
+
+- Workspace creation, member management, join codes, and role-based access.
+- Public workspace boards and private boards with explicit board members.
+- Kanban lists and cards with drag-and-drop ordering powered by `@dnd-kit`.
+- Card details with editable title, description, due date, assignees, labels, comments, and activity.
+- Board-wide card search and filtering by text, assignee, label, due date, and unassigned state.
+- Realtime board updates and member presence over Socket.IO.
+- In-app board notifications for assignments, comments, due-date reminders, member changes, and role changes.
+- Auth flow with email OTP verification, password login, access tokens, rotating refresh-token sessions, session management, and logout controls.
+- Activity logging for workspace, board, list, and card changes.
+- Production deployment with Docker images, Docker Compose, Nginx TLS termination, rate limiting, and Prisma migrations.
+
+---
+
+## Feature Overview
+
+### Authentication & Sessions
+
+- Email OTP verification before signup.
+- Password authentication with bcrypt hashing.
+- JWT access tokens and HTTP-only refresh-token cookies.
+- Refresh-token rotation with reuse detection.
+- Account settings for active sessions, revoking sessions, and logging out of other devices.
+- Auth API throttling and security middleware through NestJS, Helmet, cookies, and guards.
+
+### Workspaces
+
+- Create and update workspaces.
+- Join a workspace with a generated join code.
+- Workspace roles: `OWNER`, `ADMIN`, `MEMBER`, and `GUEST`.
+- Member lists, role changes, and workspace-scoped authorization.
+- Workspace activity timeline.
+
+### Boards
+
+- Create boards inside workspaces.
+- Board visibility modes: workspace-visible or private.
+- Board roles: `MANAGER`, `CONTRIBUTOR`, and `VIEWER`.
+- Board member management and role changes.
+- Board settings, recent activity, and member presence.
+
+### Lists & Cards
+
+- Create, rename, reorder, and delete lists.
+- Create, edit, move, reorder, and delete cards.
+- Card descriptions, due dates, assignees, labels, and comments.
+- Card activity feed for important changes.
+- Search and filter cards across the board.
+- Optimistic UI updates backed by TanStack Query cache invalidation.
+
+### Realtime Collaboration
+
+- Socket.IO namespace for board events.
+- Authenticated socket connections using access tokens.
+- Realtime broadcast of board, list, card, comment, member, and notification events.
+- Presence states for active users, card viewers, card editors, and users typing comments.
+- User-specific socket rooms for targeted notification delivery.
 
 ### Notifications
-- In-app notifications
-- Email notifications for important actions
-- Reliable background job processing
 
-### Attachments
-- File uploads via signed URLs
-- S3-compatible storage
-
-### Versioning
-- Activity logs
-- Snapshot-based version history
-- Restore previous document states
+- Board notification inbox in the dashboard.
+- Notifications for card assignment, unassignment, comments, due reminders, board member additions, and role changes.
+- Read/unread state tracking.
+- Due-date reminder records with pending, sent, and canceled states.
 
 ---
 
 ## Tech Stack
 
 ### Frontend
-| Tool | Purpose |
-|---|---|
-| Next.js (App Router) | Framework |
-| React + TypeScript | UI |
-| Zustand | UI state management |
-| TanStack Query | Server data caching |
-| TipTap Editor | Rich text editing |
-| Yjs | Collaborative CRDT engine |
+
+| Tool                   | Purpose                               |
+| ---------------------- | ------------------------------------- |
+| Next.js 16 App Router  | Web application framework             |
+| React 19               | UI rendering                          |
+| TypeScript             | Type-safe application code            |
+| Tailwind CSS 4         | Styling                               |
+| TanStack Query         | Server-state caching and invalidation |
+| Zustand                | Local dashboard UI state              |
+| Axios                  | API client with auth refresh handling |
+| Socket.IO Client       | Realtime board events and presence    |
+| `@dnd-kit`             | Drag-and-drop Kanban interactions     |
+| Radix UI + Headless UI | Accessible UI primitives              |
+| Lucide React           | Icon system                           |
 
 ### Backend
-| Tool | Purpose |
-|---|---|
-| NestJS + TypeScript | API server |
-| PostgreSQL | Relational database |
-| Prisma ORM | Database access |
 
-### Realtime Infrastructure
-| Tool | Purpose |
-|---|---|
-| Yjs | CRDT engine |
-| y-websocket | WebSocket sync provider |
-| y-indexeddb | Offline persistence |
+| Tool                   | Purpose                                 |
+| ---------------------- | --------------------------------------- |
+| NestJS 11              | API framework                           |
+| TypeScript             | Backend application code                |
+| PostgreSQL             | Relational database                     |
+| Prisma ORM             | Schema, migrations, and database access |
+| Socket.IO              | Realtime event gateway                  |
+| Passport JWT           | API authentication                      |
+| bcrypt                 | Password and OTP hashing                |
+| Nodemailer             | Signup OTP email delivery               |
+| class-validator        | DTO validation                          |
+| Helmet + cookie-parser | HTTP hardening and cookie handling      |
 
 ### Infrastructure
-| Tool | Purpose |
-|---|---|
-| Redis | Caching + presence |
-| BullMQ | Background jobs |
-| S3 | Attachments |
-| Docker | Containerization |
-| GitHub Actions | CI/CD |
 
-### Testing
-| Tool | Purpose |
-|---|---|
-| Jest | Unit tests |
-| Playwright | End-to-end tests |
+| Tool                | Purpose                                                    |
+| ------------------- | ---------------------------------------------------------- |
+| pnpm workspaces     | Monorepo package management                                |
+| Turborepo           | Build, lint, and test orchestration                        |
+| Docker              | Production web and API images                              |
+| Docker Compose      | Multi-service production runtime                           |
+| Nginx               | TLS termination, reverse proxying, gzip, and rate limiting |
+| Let's Encrypt paths | Certificate mounting for production domains                |
+| Prisma Migrate      | Database migration deployment                              |
 
 ---
 
 ## Architecture
 
-Collability uses a **hybrid architecture** that separates concerns between real-time collaboration and structured metadata.
+Collability uses a conventional full-stack architecture with a realtime event channel beside the REST API.
 
-### CRDT Layer (Real-Time Collaboration)
-Used for collaborative fields:
-- Card descriptions
-- Collaborative documents
-- Comments
-
-CRDT updates automatically merge changes across users without conflicts.
-
-### Relational Database Layer
-Used for structured metadata:
-- Users, workspaces, boards, lists, cards
-- Assignments, permissions, due dates
-
-This separation ensures **strong consistency** for metadata and **conflict-free collaboration** for documents.
-
-### System Diagram
-
-```
-Client (Next.js)
-   │
-   ├── REST API ──────────────► NestJS
-   │                               │
-   │                               ├── PostgreSQL  (metadata)
-   │                               ├── Redis       (cache + queues)
-   │                               └── S3          (attachments)
-   │
-   └── WebSocket ─────────────► Yjs Sync Server
-                                    │
-                                    └── CRDT updates + presence
+```text
+Browser
+  |
+  |  Next.js App Router UI
+  |  TanStack Query + Axios
+  v
+NestJS REST API  <-------------------->  Socket.IO board-events namespace
+  |                                             |
+  | Prisma ORM                                  | board rooms, user rooms,
+  v                                             | presence snapshots, events
+PostgreSQL
 ```
 
-### Realtime Sync Model
+The REST API owns durable state: users, sessions, workspaces, boards, board members, lists, cards, labels, comments, activity logs, notifications, and due-date reminders.
 
-Collaborative data is stored as Yjs CRDT documents with the following persistence schema:
-
-```
-updates table          snapshots table
-─────────────          ───────────────
-document_id            document_id
-seq                    snapshot_blob
-update_blob            last_seq
-```
-
-**Sync flow:**
-1. Client connects
-2. Server loads the latest snapshot
-3. Applies pending updates on top
-4. Client receives current state
-5. Edits are broadcast via WebSocket to all collaborators
-
-Snapshots are periodically generated to prevent unbounded update log growth.
+Socket.IO handles realtime delivery after authorization. Clients join board rooms, update presence, and receive board events when related data changes.
 
 ---
 
-## Project Structure
+## Monorepo Structure
 
-```
+```text
 apps/
-  api/
-    src/
-      auth/
-      users/
-      workspaces/
-      boards/
-      lists/
-      cards/
-      notifications/
-      attachments/
-  realtime/
-    yjs-server/
+  api/                 NestJS API, WebSocket gateway, tests
+  web/                 Next.js frontend
 
 packages/
-  database/
-  shared-types/
+  config/              Shared TypeScript config
+  database/            Prisma schema, migrations, generated client wrapper
+  types/               Shared TypeScript types
+  utils/               Shared utilities
 
-apps/web/
-  components/
-  features/
-    boards/
-    cards/
-    editor/
-  lib/
-  hooks/
-  store/
+deploy/
+  nginx/templates/     Production Nginx config template
+
+scripts/
+  deploy-ec2.sh        Pull images, run migrations, restart Compose stack
 ```
 
 ---
 
 ## Running Locally
 
-### 1. Install dependencies
+### Prerequisites
+
+- Node.js 22
+- pnpm 9.1.0
+- PostgreSQL database
+
+### Install Dependencies
 
 ```bash
 pnpm install
 ```
 
-### 2. Start infrastructure
+### Configure Environment
 
-```bash
-docker compose up
-```
+Create the environment files needed by the web and API apps. The exact values depend on your local database and email setup.
 
-Starts: PostgreSQL, Redis, WebSocket server.
-
-### 3. Run the backend
-
-```bash
-pnpm dev:api
-```
-
-### 4. Run the frontend
-
-```bash
-pnpm dev:web
-```
-
-### Environment Variables
-
-Create a `.env` file at the root:
+Common API values:
 
 ```env
-DATABASE_URL=
-REDIS_URL=
-
-S3_BUCKET=
-S3_ACCESS_KEY=
-S3_SECRET_KEY=
-
-JWT_SECRET=
+DATABASE_URL="postgresql://user:password@localhost:5432/collability"
+JWT_SECRET="replace-me"
+JWT_REFRESH_SECRET="replace-me"
+OTP_VERIFICATION_SECRET="replace-me"
+WEB_APP_URL="http://localhost:3000"
+SMTP_HOST=""
+SMTP_PORT=""
+SMTP_USER=""
+SMTP_PASS=""
+SMTP_FROM=""
 ```
 
----
+Common web value:
 
-## Testing
+```env
+NEXT_PUBLIC_API_URL="http://localhost:3001"
+```
+
+### Prepare the Database
 
 ```bash
-# Unit tests
-pnpm test
+pnpm --dir packages/database generate
+pnpm --dir packages/database exec prisma migrate dev
+```
 
-# End-to-end tests
-pnpm test:e2e
+### Start Development Servers
+
+```bash
+pnpm dev
+```
+
+Or run each app separately:
+
+```bash
+pnpm --filter api dev
+pnpm --filter web dev
+```
+
+The web app runs on `http://localhost:3000` and the API defaults to `http://localhost:3001`.
+
+---
+
+## Testing and Quality
+
+```bash
+pnpm lint
+pnpm test
+pnpm build
+```
+
+Useful targeted commands:
+
+```bash
+pnpm --filter api test
+pnpm --filter web lint
+pnpm --filter web build
+pnpm --filter api build
 ```
 
 ---
 
-## Roadmap
+## Production Deployment
 
-- [ ] Collaborative canvas
-- [ ] Full-text search
-- [ ] Analytics dashboard
-- [ ] Mobile app
-- [ ] WebRTC peer-to-peer sync
+The repository includes production Dockerfiles for the web and API services plus a Compose/Nginx setup.
+
+### Build Images
+
+```bash
+docker build -f Dockerfile.api -t collability-api .
+docker build -f Dockerfile.web -t collability-web .
+```
+
+### Run with Docker Compose
+
+`docker-compose.prod.yml` expects published images by default:
+
+```env
+API_IMAGE=ghcr.io/hafzism/collability-api:latest
+WEB_IMAGE=ghcr.io/hafzism/collability-web:latest
+WEB_DOMAIN=your-web-domain.com
+API_DOMAIN=api.your-web-domain.com
+```
+
+Then deploy:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+```
+
+The included `scripts/deploy-ec2.sh` pulls the configured images, runs Prisma migrations inside the API container, restarts the stack, and prunes old images.
+
+Nginx terminates TLS, proxies web traffic to port `3000`, proxies API traffic to port `3001`, forwards Socket.IO upgrades, applies request limits, enables gzip, and sets common security headers.
 
 ---
 
-## Why Collability?
+## Portfolio Summary
 
-This project demonstrates real-world knowledge of:
+Collability demonstrates a production-ready full-stack collaboration workflow: authenticated workspaces, role-aware boards, drag-and-drop Kanban planning, realtime board events, card comments, member presence, notifications, and deployment automation.
 
-- Real-time distributed systems
-- CRDT synchronization and conflict resolution
-- Offline-first architecture
-- Scalable backend design
-- Relational data modeling
-- Modern React + Next.js application architecture
+It highlights practical engineering across frontend state management, backend authorization, relational data modeling, realtime gateways, secure auth sessions, database migrations, containerization, and Linux/Nginx hosting.
 
-It reflects how production collaborative products are actually built.
+---
+
+## Keywords
+
+Next.js, React, TypeScript, NestJS, PostgreSQL, Prisma, Socket.IO, Kanban, realtime collaboration, role-based access control, JWT authentication, refresh token rotation, OTP verification, TanStack Query, Zustand, Tailwind CSS, Docker, Docker Compose, Nginx, EC2 deployment, full-stack application, monorepo, Turborepo.
 
 ---
 

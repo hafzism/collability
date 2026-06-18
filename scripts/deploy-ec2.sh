@@ -17,7 +17,7 @@ docker builder prune -af
 $COMPOSE pull
 
 $COMPOSE run --rm api sh -lc \
-  "./node_modules/.bin/prisma migrate deploy --schema node_modules/@repo/database/prisma/schema.prisma"
+  "cd node_modules/@repo/database && /app/apps/api/node_modules/.bin/prisma migrate deploy"
 
 $COMPOSE up -d --remove-orphans
 $COMPOSE ps

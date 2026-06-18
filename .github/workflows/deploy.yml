@@ -67,6 +67,10 @@ jobs:
         run: |
           ssh -i ~/.ssh/collability_ec2 "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
             "cd '${{ secrets.EC2_APP_DIR }}' && \
+             git fetch origin main && \
+             git checkout main && \
+             git pull --ff-only origin main && \
+             chmod +x scripts/deploy-ec2.sh && \
              WEB_IMAGE='${{ env.WEB_IMAGE }}:${{ github.sha }}' \
              API_IMAGE='${{ env.API_IMAGE }}:${{ github.sha }}' \
              ./scripts/deploy-ec2.sh"

@@ -2,6 +2,7 @@
 set -eu
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
+COMPOSE="docker compose --env-file .env.production -f $COMPOSE_FILE"
 
 if [ ! -f ".env.production" ]; then
   echo "Missing .env.production on the EC2 server."
@@ -9,11 +10,11 @@ if [ ! -f ".env.production" ]; then
   exit 1
 fi
 
-docker compose -f "$COMPOSE_FILE" pull
+$COMPOSE pull
 
-docker compose -f "$COMPOSE_FILE" run --rm api sh -lc \
+$COMPOSE run --rm api sh -lc \
   "cd /app/packages/database && pnpm exec prisma migrate deploy"
 
-docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
-docker compose -f "$COMPOSE_FILE" ps
+$COMPOSE up -d --remove-orphans
+$COMPOSE ps
 docker image prune -f

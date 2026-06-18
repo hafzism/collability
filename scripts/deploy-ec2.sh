@@ -10,10 +10,14 @@ if [ ! -f ".env.production" ]; then
   exit 1
 fi
 
+docker container prune -f
+docker image prune -af
+docker builder prune -af
+
 $COMPOSE pull
 
 $COMPOSE run --rm api sh -lc \
-  "cd /app/packages/database && pnpm exec prisma migrate deploy"
+  "./node_modules/.bin/prisma migrate deploy --schema node_modules/@repo/database/prisma/schema.prisma"
 
 $COMPOSE up -d --remove-orphans
 $COMPOSE ps

@@ -77,7 +77,17 @@ server {
 
     client_max_body_size 2m;
 
-    location ~ ^/(auth/request-otp|auth/login|auth/register|auth/refresh)$ {
+    location = /auth/refresh {
+        limit_req zone=api_limit burst=30 nodelay;
+        proxy_pass http://collability_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location ~ ^/(auth/request-otp|auth/login|auth/register)$ {
         limit_req zone=auth_limit burst=5 nodelay;
         proxy_pass http://collability_api;
         proxy_http_version 1.1;

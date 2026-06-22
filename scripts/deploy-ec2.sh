@@ -20,5 +20,6 @@ $COMPOSE run --rm api sh -lc \
   "cd node_modules/@repo/database && /app/apps/api/node_modules/.bin/prisma migrate deploy"
 
 $COMPOSE up -d --remove-orphans
+$COMPOSE restart nginx
 $COMPOSE ps
 docker image prune -f

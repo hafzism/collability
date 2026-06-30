@@ -1,14 +1,18 @@
 import { Exclude } from 'class-transformer';
-import { User } from '@repo/database';
+import { AuthProvider, User } from '@repo/database';
 
 export class UserEntity implements User {
   id!: string;
   email!: string;
   name!: string;
   avatarUrl!: string | null;
+  authProvider!: AuthProvider;
 
   @Exclude()
-  passwordHash!: string;
+  passwordHash!: string | null;
+
+  @Exclude()
+  googleId!: string | null;
 
   createdAt!: Date;
   updatedAt!: Date;

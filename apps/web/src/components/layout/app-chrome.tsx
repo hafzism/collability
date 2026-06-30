@@ -6,7 +6,12 @@ import { usePathname } from "next/navigation";
 
 import { SiteHeader } from "@/components/navigation/site-header";
 
-const headerlessRoutes = new Set(["/login", "/signup"]);
+const headerlessRoutes = new Set([
+  "/auth/callback",
+  "/forgot-password",
+  "/login",
+  "/signup",
+]);
 
 export function AppChrome({ children }: PropsWithChildren) {
   const pathname = usePathname();

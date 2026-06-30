@@ -14,7 +14,7 @@ import {
 import { AuthInput } from "@/components/auth/auth-input";
 import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { Button } from "@/components/ui/button";
-import { register, requestOtp, verifyOtp } from "@/lib/auth";
+import { register, requestOtp, startGoogleAuth, verifyOtp } from "@/lib/auth";
 
 type SignupStep = "email" | "otp" | "profile";
 
@@ -134,10 +134,6 @@ export function SignupFlow() {
     }
   }
 
-  function handleGoogleSignup() {
-    return;
-  }
-
   function handleBackToEmail() {
     setStep("email");
     setOtp("");
@@ -157,8 +153,7 @@ export function SignupFlow() {
           <div className="space-y-5">
             <GoogleAuthButton
               label="Continue with Google"
-              onClick={handleGoogleSignup}
-              disabled
+              onClick={startGoogleAuth}
             />
 
             <div className="flex items-center gap-3 text-xs uppercase tracking-[0.24em] text-muted-foreground">

@@ -10,6 +10,7 @@ describe('AuthService production auth flow', () => {
     findByEmail: jest.fn(),
     findById: jest.fn(),
     create: jest.fn(),
+    update: jest.fn(),
   };
 
   const jwtService = {
@@ -39,6 +40,7 @@ describe('AuthService production auth flow', () => {
 
   const authMailerService = {
     sendSignupOtpEmail: jest.fn(),
+    sendPasswordResetOtpEmail: jest.fn(),
   };
 
   beforeEach(() => {
@@ -175,6 +177,7 @@ describe('AuthService production auth flow', () => {
       email: 'new@company.com',
       name: 'New User',
       passwordHash: await bcrypt.hash('secret123', 10),
+      authProvider: 'EMAIL',
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -209,6 +212,101 @@ describe('AuthService production auth flow', () => {
         currentRefreshTokenHash: expect.any(String),
       }),
     });
+  });
+
+  it('rejects password login for a Google-only account', async () => {
+    usersService.findByEmail.mockResolvedValue({
+      id: 'user-1',
+      email: 'new@company.com',
+      name: 'New User',
+      passwordHash: null,
+      authProvider: 'GOOGLE',
+      googleId: 'google-user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      service.login({
+        email: 'new@company.com',
+        password: 'secret123',
+      } as any),
+    ).rejects.toThrow(new UnauthorizedException('This account uses Google sign-in'));
+  });
+
+  it('creates a Google account and device session from a verified Google profile', async () => {
+    jest.spyOn(service as any, 'fetchGoogleUser').mockResolvedValue({
+      sub: 'google-user-1',
+      email: 'new@company.com',
+      email_verified: true,
+      name: 'New User',
+      picture: 'https://example.com/avatar.png',
+    });
+    usersService.findByEmail.mockResolvedValue(null);
+    usersService.create.mockResolvedValue({
+      id: 'user-1',
+      email: 'new@company.com',
+      name: 'New User',
+      avatarUrl: 'https://example.com/avatar.png',
+      passwordHash: null,
+      authProvider: 'GOOGLE',
+      googleId: 'google-user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    prismaService.authSession.create.mockResolvedValue({ id: 'session-1' });
+    jwtService.sign.mockReturnValueOnce('access-token').mockReturnValueOnce('refresh-token');
+
+    await expect(service.loginWithGoogle('oauth-code')).resolves.toEqual({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      user: expect.objectContaining({
+        email: 'new@company.com',
+        name: 'New User',
+      }),
+    });
+
+    expect(usersService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'new@company.com',
+        passwordHash: null,
+        authProvider: 'GOOGLE',
+        googleId: 'google-user-1',
+      }),
+    );
+  });
+
+  it('sends password reset OTP only for email-password accounts', async () => {
+    usersService.findByEmail.mockResolvedValue({
+      id: 'user-1',
+      email: 'new@company.com',
+      name: 'New User',
+      passwordHash: 'hashed',
+      authProvider: 'EMAIL',
+      googleId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    prismaService.emailOtpVerification.deleteMany.mockResolvedValue({ count: 0 });
+    prismaService.emailOtpVerification.create.mockResolvedValue({ id: 'otp-1' });
+    authMailerService.sendPasswordResetOtpEmail.mockResolvedValue(undefined);
+
+    await expect(
+      service.requestPasswordReset({ email: 'new@company.com' } as any),
+    ).resolves.toEqual({
+      message: 'Password reset code sent successfully',
+    });
+
+    expect(prismaService.emailOtpVerification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        email: 'new@company.com',
+        purpose: 'PASSWORD_RESET',
+      }),
+    });
+    expect(authMailerService.sendPasswordResetOtpEmail).toHaveBeenCalledWith(
+      'new@company.com',
+      expect.stringMatching(/^\d{6}$/),
+    );
   });
 
   it('rotates the refresh token and updates the session on refresh', async () => {

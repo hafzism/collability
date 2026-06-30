@@ -11,6 +11,9 @@ import { plainToInstance } from 'class-transformer';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyPasswordResetDto } from './dto/verify-password-reset.dto';
 import { AuthMailerService } from './auth-mailer.service';
 import { User } from '@repo/database';
 
@@ -26,6 +29,20 @@ type RefreshTokenPayload = {
   type?: string;
 };
 
+type GoogleTokenResponse = {
+  access_token?: string;
+  error?: string;
+  error_description?: string;
+};
+
+type GoogleUserInfo = {
+  sub?: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  picture?: string;
+};
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -37,12 +54,13 @@ export class AuthService {
   ) {}
 
   async register(registerDto: RegisterDto, sessionContext: SessionContext = {}) {
+    const email = registerDto.email.trim().toLowerCase();
     const verifiedEmail = await this.validateVerificationToken(registerDto);
-    if (verifiedEmail !== registerDto.email) {
+    if (verifiedEmail !== email) {
       throw new UnauthorizedException('Verification token does not match email');
     }
 
-    const existingUser = await this.usersService.findByEmail(registerDto.email);
+    const existingUser = await this.usersService.findByEmail(email);
     if (existingUser) {
       throw new ConflictException('Email already in use');
     }
@@ -51,9 +69,10 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(registerDto.password, salt);
 
     const user = await this.usersService.create({
-      email: registerDto.email,
+      email,
       name: registerDto.name,
       passwordHash,
+      authProvider: 'EMAIL',
     });
 
     return this.createAuthenticatedSession(user, sessionContext);
@@ -70,6 +89,7 @@ export class AuthService {
       where: {
         email,
         verifiedAt: null,
+        purpose: 'SIGNUP',
       },
     });
 
@@ -81,6 +101,7 @@ export class AuthService {
       data: {
         email,
         codeHash,
+        purpose: 'SIGNUP',
         expiresAt,
       },
     });
@@ -98,6 +119,7 @@ export class AuthService {
       where: {
         email,
         verifiedAt: null,
+        purpose: 'SIGNUP',
       },
       orderBy: {
         createdAt: 'desc',
@@ -106,6 +128,10 @@ export class AuthService {
 
     if (!verification || verification.expiresAt.getTime() < Date.now()) {
       throw new UnauthorizedException('Verification code has expired');
+    }
+
+    if (verification.attempts >= 5) {
+      throw new UnauthorizedException('Too many invalid attempts. Request a new code');
     }
 
     const isMatch = await bcrypt.compare(verifyOtpDto.code, verification.codeHash);
@@ -146,9 +172,13 @@ export class AuthService {
   }
 
   async validateUser(email: string, pass: string): Promise<any> {
-    const user = await this.usersService.findByEmail(email);
+    const user = await this.usersService.findByEmail(email.trim().toLowerCase());
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.authProvider !== 'EMAIL' || !user.passwordHash) {
+      throw new UnauthorizedException('This account uses Google sign-in');
     }
 
     const isMatch = await bcrypt.compare(pass, user.passwordHash);
@@ -162,6 +192,187 @@ export class AuthService {
   async login(loginDto: LoginDto, sessionContext: SessionContext = {}) {
     const user = await this.validateUser(loginDto.email, loginDto.password);
     return this.createAuthenticatedSession(user, sessionContext);
+  }
+
+  getGoogleAuthorizationUrl(state: string) {
+    const params = new URLSearchParams({
+      client_id: this.getGoogleClientId(),
+      redirect_uri: this.getGoogleRedirectUri(),
+      response_type: 'code',
+      scope: 'openid email profile',
+      state,
+      prompt: 'select_account',
+    });
+
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
+
+  async loginWithGoogle(code: string, sessionContext: SessionContext = {}) {
+    if (!code) {
+      throw new UnauthorizedException('Google authorization failed');
+    }
+
+    const googleUser = await this.fetchGoogleUser(code);
+    if (!googleUser.sub || !googleUser.email || !googleUser.email_verified) {
+      throw new UnauthorizedException('Google account email is not verified');
+    }
+
+    const email = googleUser.email.trim().toLowerCase();
+    const existingUser = await this.usersService.findByEmail(email);
+
+    if (existingUser && existingUser.authProvider !== 'GOOGLE') {
+      throw new ConflictException('This email uses password sign-in');
+    }
+
+    if (existingUser && existingUser.googleId !== googleUser.sub) {
+      throw new ConflictException('This email is linked to another Google account');
+    }
+
+    const user =
+      existingUser ??
+      (await this.usersService.create({
+        email,
+        name: googleUser.name?.trim() || email.split('@')[0],
+        avatarUrl: googleUser.picture,
+        passwordHash: null,
+        authProvider: 'GOOGLE',
+        googleId: googleUser.sub,
+      }));
+
+    return this.createAuthenticatedSession(user, sessionContext);
+  }
+
+  async requestPasswordReset(requestPasswordResetDto: RequestPasswordResetDto) {
+    const email = requestPasswordResetDto.email.trim().toLowerCase();
+    const user = await this.usersService.findByEmail(email);
+
+    if (!user) {
+      return {
+        message: 'If an email account exists, a reset code has been sent',
+      };
+    }
+
+    if (user.authProvider !== 'EMAIL' || !user.passwordHash) {
+      throw new ConflictException('This account uses Google sign-in');
+    }
+
+    await this.prisma.emailOtpVerification.deleteMany({
+      where: {
+        email,
+        purpose: 'PASSWORD_RESET',
+        verifiedAt: null,
+      },
+    });
+
+    const otpCode = this.generateOtpCode();
+    const codeHash = await bcrypt.hash(otpCode, await bcrypt.genSalt());
+    const expiresAt = new Date(Date.now() + this.getOtpExpiresMinutes() * 60_000);
+
+    await this.prisma.emailOtpVerification.create({
+      data: {
+        email,
+        codeHash,
+        purpose: 'PASSWORD_RESET',
+        expiresAt,
+      },
+    });
+
+    await this.authMailerService.sendPasswordResetOtpEmail(email, otpCode);
+
+    return {
+      message: 'Password reset code sent successfully',
+    };
+  }
+
+  async verifyPasswordReset(verifyPasswordResetDto: VerifyPasswordResetDto) {
+    const email = verifyPasswordResetDto.email.trim().toLowerCase();
+    const verification = await this.prisma.emailOtpVerification.findFirst({
+      where: {
+        email,
+        verifiedAt: null,
+        purpose: 'PASSWORD_RESET',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (!verification || verification.expiresAt.getTime() < Date.now()) {
+      throw new UnauthorizedException('Verification code has expired');
+    }
+
+    if (verification.attempts >= 5) {
+      throw new UnauthorizedException('Too many invalid attempts. Request a new code');
+    }
+
+    const isMatch = await bcrypt.compare(verifyPasswordResetDto.code, verification.codeHash);
+    if (!isMatch) {
+      await this.prisma.emailOtpVerification.update({
+        where: { id: verification.id },
+        data: {
+          attempts: {
+            increment: 1,
+          },
+        },
+      });
+
+      throw new UnauthorizedException('Invalid verification code');
+    }
+
+    await this.prisma.emailOtpVerification.update({
+      where: { id: verification.id },
+      data: {
+        verifiedAt: new Date(),
+      },
+    });
+
+    return {
+      resetToken: this.jwtService.sign(
+        {
+          purpose: 'password-reset',
+          email,
+          verificationId: verification.id,
+        },
+        {
+          secret: this.getOtpVerificationSecret(),
+          expiresIn: this.getOtpVerificationExpiresIn() as any,
+        },
+      ),
+    };
+  }
+
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    const email = resetPasswordDto.email.trim().toLowerCase();
+    const verifiedEmail = await this.validatePasswordResetToken(resetPasswordDto);
+    if (verifiedEmail !== email) {
+      throw new UnauthorizedException('Reset token does not match email');
+    }
+
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {
+      throw new UnauthorizedException('Invalid reset token');
+    }
+
+    if (user.authProvider !== 'EMAIL' || !user.passwordHash) {
+      throw new ConflictException('This account uses Google sign-in');
+    }
+
+    const passwordHash = await bcrypt.hash(resetPasswordDto.password, await bcrypt.genSalt());
+    await this.usersService.update(user.id, { passwordHash });
+    await this.prisma.authSession.updateMany({
+      where: {
+        userId: user.id,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+        revokedReason: 'password_reset',
+      },
+    });
+
+    return {
+      message: 'Password reset successfully',
+    };
   }
 
   async refreshSession(refreshToken: string, sessionContext: SessionContext = {}) {
@@ -382,6 +593,78 @@ export class AuthService {
     return payload.email;
   }
 
+  private async validatePasswordResetToken(resetPasswordDto: ResetPasswordDto) {
+    if (!resetPasswordDto.resetToken) {
+      throw new UnauthorizedException('Password reset verification is required');
+    }
+
+    let payload: { email?: string; purpose?: string; verificationId?: string };
+
+    try {
+      payload = this.jwtService.verify(resetPasswordDto.resetToken, {
+        secret: this.getOtpVerificationSecret(),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid reset token');
+    }
+
+    if (payload.purpose !== 'password-reset' || !payload.email || !payload.verificationId) {
+      throw new UnauthorizedException('Invalid reset token');
+    }
+
+    const verification = await this.prisma.emailOtpVerification.findFirst({
+      where: {
+        id: payload.verificationId,
+        email: payload.email,
+        purpose: 'PASSWORD_RESET',
+        verifiedAt: {
+          not: null,
+        },
+      },
+    });
+
+    if (!verification) {
+      throw new UnauthorizedException('Password reset verification is required');
+    }
+
+    return payload.email;
+  }
+
+  private async fetchGoogleUser(code: string): Promise<GoogleUserInfo> {
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code,
+        client_id: this.getGoogleClientId(),
+        client_secret: this.getGoogleClientSecret(),
+        redirect_uri: this.getGoogleRedirectUri(),
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    const tokenBody = (await tokenResponse.json()) as GoogleTokenResponse;
+    if (!tokenResponse.ok || !tokenBody.access_token) {
+      throw new UnauthorizedException(
+        tokenBody.error_description || 'Google token exchange failed',
+      );
+    }
+
+    const userResponse = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+      headers: {
+        Authorization: `Bearer ${tokenBody.access_token}`,
+      },
+    });
+
+    if (!userResponse.ok) {
+      throw new UnauthorizedException('Google profile lookup failed');
+    }
+
+    return (await userResponse.json()) as GoogleUserInfo;
+  }
+
   private generateOtpCode() {
     return randomInt(0, 1_000_000).toString().padStart(6, '0');
   }
@@ -534,6 +817,30 @@ export class AuthService {
     const value = this.configService.get<string>('OTP_VERIFICATION_SECRET');
     if (!value) {
       throw new Error('OTP_VERIFICATION_SECRET must be set');
+    }
+    return value;
+  }
+
+  private getGoogleClientId() {
+    const value = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    if (!value) {
+      throw new Error('GOOGLE_CLIENT_ID must be set');
+    }
+    return value;
+  }
+
+  private getGoogleClientSecret() {
+    const value = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
+    if (!value) {
+      throw new Error('GOOGLE_CLIENT_SECRET must be set');
+    }
+    return value;
+  }
+
+  private getGoogleRedirectUri() {
+    const value = this.configService.get<string>('GOOGLE_REDIRECT_URI');
+    if (!value) {
+      throw new Error('GOOGLE_REDIRECT_URI must be set');
     }
     return value;
   }

@@ -60,6 +60,8 @@ export function BoardSettingsModal({
     normalizedTitle !== board.title ||
     normalizedDescription !== (board.description ?? "") ||
     visibility !== board.visibility;
+  const formattedVisibility =
+    board.visibility === "WORKSPACE" ? "Workspace" : "Private";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -113,7 +115,10 @@ export function BoardSettingsModal({
   }
 
   return (
-    <DashboardModal className="max-w-2xl" onClose={onClose}>
+    <DashboardModal
+      className={cn("max-w-2xl", !canManageBoard ? "max-w-xl" : "")}
+      onClose={onClose}
+    >
       <div className="relative">
         <div
           className={cn(
@@ -127,11 +132,12 @@ export function BoardSettingsModal({
               <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-[#f5f5f3]">
                 {canManageBoard ? "Board settings" : "Board details"}
               </h2>
-              <p className="mt-2 max-w-xl text-sm text-[#9a9a95]">
-                {canManageBoard
-                  ? "Update the board title, description, and visibility, or delete it permanently."
-                  : "View the current board title, description, and visibility."}
-              </p>
+              {canManageBoard ? (
+                <p className="mt-2 max-w-xl text-sm text-[#9a9a95]">
+                  Update the board title, description, and visibility, or delete
+                  it permanently.
+                </p>
+              ) : null}
             </div>
 
             <button
@@ -145,69 +151,94 @@ export function BoardSettingsModal({
           </div>
 
           <form className="space-y-5" onSubmit={handleSubmit}>
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-[#ecece8]">Title</span>
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                disabled={!canManageBoard}
-                className="ui-pressed-active w-full rounded-[14px] border px-4 py-3 text-sm text-white outline-none transition"
-              />
-            </label>
+            {canManageBoard ? (
+              <>
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-[#ecece8]">
+                    Title
+                  </span>
+                  <input
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    className="ui-pressed-active w-full rounded-[14px] border px-4 py-3 text-sm text-white outline-none transition"
+                  />
+                </label>
 
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-[#ecece8]">
-                Description
-              </span>
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                rows={4}
-                disabled={!canManageBoard}
-                className="ui-pressed-active w-full resize-none rounded-[14px] border px-4 py-3 text-sm text-white outline-none transition"
-              />
-            </label>
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-[#ecece8]">
+                    Description
+                  </span>
+                  <textarea
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    rows={4}
+                    className="ui-pressed-active w-full resize-none rounded-[14px] border px-4 py-3 text-sm text-white outline-none transition"
+                  />
+                </label>
 
-            <div className="space-y-2">
-              <span className="text-sm font-medium text-[#ecece8]">
-                Visibility
-              </span>
-              <div className="grid grid-cols-2 gap-2">
-                {(["WORKSPACE", "PRIVATE"] as const).map((option) => {
-                  const isSelected = visibility === option;
+                <div className="space-y-2">
+                  <span className="text-sm font-medium text-[#ecece8]">
+                    Visibility
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["WORKSPACE", "PRIVATE"] as const).map((option) => {
+                      const isSelected = visibility === option;
 
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      disabled={!canManageBoard}
-                      onClick={() => setVisibility(option)}
-                      className={cn(
-                        "rounded-[14px] border px-4 py-3 text-left transition",
-                        isSelected
-                          ? "ui-pressed-active text-[#f3f3f0]"
-                          : "border-white/8 bg-[#111112] text-[#a0a09a] hover:border-white/12 hover:text-white",
-                        !canManageBoard ? "cursor-default" : "",
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-sm font-medium">
-                          {option === "WORKSPACE" ? "Workspace" : "Private"}
-                        </p>
-                        {isSelected ? (
-                          <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#77d08a]" />
-                        ) : null}
-                      </div>
-                      <p className="mt-3 text-xs leading-5 text-inherit/80">
-                        {option === "WORKSPACE"
-                          ? "All workspace members can see it in viewer mode unless overridden."
-                          : "Only explicit board members can access it, plus workspace owners and admins as viewers."}
-                      </p>
-                    </button>
-                  );
-                })}
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setVisibility(option)}
+                          className={cn(
+                            "rounded-[14px] border px-4 py-3 text-left transition",
+                            isSelected
+                              ? "ui-pressed-active text-[#f3f3f0]"
+                              : "border-white/8 bg-[#111112] text-[#a0a09a] hover:border-white/12 hover:text-white",
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-sm font-medium">
+                              {option === "WORKSPACE" ? "Workspace" : "Private"}
+                            </p>
+                            {isSelected ? (
+                              <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#77d08a]" />
+                            ) : null}
+                          </div>
+                          <p className="mt-3 text-xs leading-5 text-inherit/80">
+                            {option === "WORKSPACE"
+                              ? "All workspace members can see it in viewer mode unless overridden."
+                              : "Only explicit board members can access it, plus workspace owners and admins as viewers."}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-0">
+                <section className="border-b border-white/10 pb-5">
+                  <p className="text-sm text-[#a5a5a0]">Title</p>
+                  <p className="mt-3 text-sm font-semibold text-[#f4f4f1]">
+                    {board.title}
+                  </p>
+                </section>
+
+                <section className="border-b border-white/10 py-5">
+                  <p className="text-sm text-[#a5a5a0]">Description</p>
+                  <p className="mt-3 whitespace-pre-wrap text-sm font-semibold leading-6 text-[#f4f4f1]">
+                    {board.description?.trim() || "No description"}
+                  </p>
+                </section>
+
+                <section className="pt-5">
+                  <p className="text-sm text-[#a5a5a0]">Visibility</p>
+                  <p className="mt-3 text-sm font-semibold text-[#f4f4f1]">
+                    {formattedVisibility}
+                  </p>
+                </section>
               </div>
-            </div>
+            )}
 
             {titleError ? (
               <p className="text-xs text-[#f07f6a]">{titleError}</p>
@@ -216,7 +247,13 @@ export function BoardSettingsModal({
               <p className="text-xs text-[#f07f6a]">{actionError}</p>
             ) : null}
 
-            <div className="flex items-center justify-between gap-3 border-t border-white/8 pt-5">
+            <div
+              className={cn(
+                "flex items-center gap-3",
+                canManageBoard ? "justify-between" : "justify-end",
+                canManageBoard ? "border-t border-white/8 pt-5" : "pt-1",
+              )}
+            >
               {canManageBoard ? (
                 <button
                   type="button"
@@ -228,11 +265,7 @@ export function BoardSettingsModal({
                 >
                   Delete board
                 </button>
-              ) : (
-                <span className="text-xs text-[#8f8f89]">
-                  Visibility: {board.visibility.toLowerCase()}
-                </span>
-              )}
+              ) : null}
 
               <div className="flex items-center gap-3">
                 <button
@@ -240,24 +273,17 @@ export function BoardSettingsModal({
                   onClick={onClose}
                   className="ui-pressed-button rounded-[12px] border px-4 py-2 text-sm transition"
                 >
-                  Cancel
+                  {canManageBoard ? "Cancel" : "Close"}
                 </button>
-                <button
-                  type={canManageBoard ? "submit" : "button"}
-                  onClick={!canManageBoard ? onClose : undefined}
-                  disabled={
-                    canManageBoard
-                      ? Boolean(titleError) || !hasChanges || isSaving
-                      : false
-                  }
-                  className="ui-pressed-primary rounded-[12px] border px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {canManageBoard
-                    ? isSaving
-                      ? "Saving..."
-                      : "Save changes"
-                    : "Done"}
-                </button>
+                {canManageBoard ? (
+                  <button
+                    type="submit"
+                    disabled={Boolean(titleError) || !hasChanges || isSaving}
+                    className="ui-pressed-primary rounded-[12px] border px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSaving ? "Saving..." : "Save changes"}
+                  </button>
+                ) : null}
               </div>
             </div>
           </form>

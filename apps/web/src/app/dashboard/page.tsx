@@ -1,21 +1,17 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { dashboardQueryKeys } from "@/components/dashboard/dashboard-query-keys";
-import {
-  getCurrentUser,
-  getErrorMessage,
-  logout,
-  type AuthUser,
-} from "@/lib/auth";
+import { getCurrentUser, logout, type AuthUser } from "@/lib/auth";
 
 export default function DashboardPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const hasHandledAuthErrorRef = useRef(false);
   const currentUserQuery = useQuery<AuthUser>({
     queryKey: dashboardQueryKeys.auth.currentUser,
     queryFn: getCurrentUser,
@@ -23,10 +19,15 @@ export default function DashboardPage() {
   });
 
   useEffect(() => {
-    if (currentUserQuery.isError) {
+    if (!currentUserQuery.isError || hasHandledAuthErrorRef.current) {
+      return;
+    }
+
+    hasHandledAuthErrorRef.current = true;
+    void logout().finally(() => {
       queryClient.clear();
       router.replace("/login");
-    }
+    });
   }, [currentUserQuery.isError, queryClient, router]);
 
   async function handleLogout() {
@@ -47,10 +48,7 @@ export default function DashboardPage() {
           </h1>
           <p className="mt-3 text-muted-foreground">
             {currentUserQuery.isError
-              ? getErrorMessage(
-                  currentUserQuery.error,
-                  "Your session expired. Please sign in again.",
-                )
+              ? "Taking you to sign in."
               : "Checking your session."}
           </p>
         </div>

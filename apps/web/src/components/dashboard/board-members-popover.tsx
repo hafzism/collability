@@ -125,16 +125,18 @@ export function BoardMembersPopover({
         })}
       </div>
 
-      <div className="border-t border-white/8 p-3">
-        <button
-          type="button"
-          onClick={onManageMembers}
-          className="ui-pressed-button flex w-full items-center justify-center gap-2 rounded-[10px] border px-3 py-2 text-[12px] font-medium transition"
-        >
-          <UserPlus className="h-3.5 w-3.5" />
-          {canManageBoard ? "Add or manage members" : "View members"}
-        </button>
-      </div>
+      {canManageBoard ? (
+        <div className="border-t border-white/8 p-3">
+          <button
+            type="button"
+            onClick={onManageMembers}
+            className="ui-pressed-button flex w-full items-center justify-center gap-2 rounded-[10px] border px-3 py-2 text-[12px] font-medium transition"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            Add or manage members
+          </button>
+        </div>
+      ) : null}
     </DashboardPopoverPanel>
   );
 }

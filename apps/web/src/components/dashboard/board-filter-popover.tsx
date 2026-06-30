@@ -387,13 +387,8 @@ export function BoardFilterPopover({
     <DashboardPopoverPanel className="left-0 right-auto top-[calc(100%+8px)] h-[420px] w-[360px]">
       {activeSection === null ? (
         <>
-          <div className="flex items-start justify-between border-b border-white/8 px-5 py-4">
-            <div>
-              <p className="text-[18px] font-semibold text-[#f4f4f1]">Filters</p>
-              <p className="mt-1 text-[12px] text-[#8f8f89]">
-                Apply board filters only when you are ready.
-              </p>
-            </div>
+          <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+            <p className="text-[18px] font-semibold text-[#f4f4f1]">Filters</p>
             <button
               type="button"
               onClick={onClose}
@@ -404,7 +399,7 @@ export function BoardFilterPopover({
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-color:rgba(255,255,255,0.28)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/25 [&::-webkit-scrollbar-track]:bg-transparent">
             <FilterOptionRow
               icon={UserCheck}
               label="Assignees"

@@ -55,16 +55,6 @@ function HeroVisual() {
           className="w-full rounded-xl border border-white/5 bg-black"
         />
       </div>
-
-      <div className="absolute -bottom-6 -right-2 z-20 w-[25%] min-w-[140px] max-w-[240px] md:-bottom-12 md:-right-12">
-        <div className="origin-bottom-right transform overflow-hidden rounded-[1rem] border-[6px] border-black bg-black shadow-2xl ring-1 ring-white/20 transition-transform duration-500 hover:z-30 hover:scale-105 hover:rotate-0 md:rounded-[2rem] md:border-[10px] -rotate-6">
-          <img
-            src="/img/screenshot-phone-1.webp"
-            alt="Collability Mobile"
-            className="h-auto w-full rounded-[0.75rem] border border-white/10 bg-black opacity-90 md:rounded-[1.25rem]"
-          />
-        </div>
-      </div>
     </motion.div>
   );
 }

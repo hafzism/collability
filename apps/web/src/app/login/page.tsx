@@ -15,7 +15,7 @@ import { AuthInput } from "@/components/auth/auth-input";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { Button } from "@/components/ui/button";
-import { getErrorMessage, login } from "@/lib/auth";
+import { getErrorMessage, login, startGoogleAuth } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -60,10 +60,6 @@ export default function LoginPage() {
     }
   }
 
-  function handleGoogleLogin() {
-    return;
-  }
-
   return (
     <AuthShell>
       <AuthCard>
@@ -73,7 +69,7 @@ export default function LoginPage() {
           <div className="space-y-5">
             <GoogleAuthButton
               label="Continue with Google"
-              onClick={handleGoogleLogin}
+              onClick={startGoogleAuth}
             />
 
             <div className="flex items-center gap-3 text-xs uppercase tracking-[0.24em] text-muted-foreground">
@@ -109,13 +105,12 @@ export default function LoginPage() {
             />
 
             <div className="-mt-3 flex justify-end">
-              <a
-                href="#"
-                onClick={(event) => event.preventDefault()}
+              <Link
+                href="/forgot-password"
                 className="text-sm font-medium text-blue-400 transition-colors hover:text-blue-300"
               >
                 Forgot password?
-              </a>
+              </Link>
             </div>
 
             <Button

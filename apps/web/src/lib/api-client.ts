@@ -53,6 +53,7 @@ const refreshClient = axios.create({
 });
 
 let refreshRequestPromise: Promise<string> | null = null;
+let clearSessionCookiePromise: Promise<void> | null = null;
 
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = getAccessToken();
@@ -103,9 +104,11 @@ async function refreshAccessToken() {
         setAccessToken(response.data.accessToken);
         return response.data.accessToken;
       })
-      .catch((error: AxiosError<ApiErrorResponse>) => {
+      .catch(() => {
         clearAccessToken();
-        throw error;
+        return clearServerSessionCookie().then(() => {
+          throw new Error("Your session expired. Please sign in again.");
+        });
       })
       .finally(() => {
         refreshRequestPromise = null;
@@ -113,6 +116,20 @@ async function refreshAccessToken() {
   }
 
   return refreshRequestPromise;
+}
+
+async function clearServerSessionCookie() {
+  if (!clearSessionCookiePromise) {
+    clearSessionCookiePromise = refreshClient
+      .post("/auth/logout")
+      .catch(() => undefined)
+      .then(() => undefined)
+      .finally(() => {
+        clearSessionCookiePromise = null;
+      });
+  }
+
+  return clearSessionCookiePromise;
 }
 
 export async function apiRequest<T>(

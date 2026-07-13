@@ -25,6 +25,23 @@ export class AuthMailerService {
     });
   }
 
+  async sendPasswordResetOtpEmail(email: string, otpCode: string) {
+    const transporter = this.getTransporter();
+    const from = this.configService.get<string>('SMTP_FROM');
+
+    if (!from) {
+      throw new Error('SMTP_FROM must be set');
+    }
+
+    await transporter.sendMail({
+      from,
+      to: email,
+      subject: 'Reset your Collability password',
+      text: `Your Collability password reset code is ${otpCode}. It expires in ${this.getOtpExpiresMinutes()} minutes.`,
+      html: this.buildPasswordResetOtpTemplate(otpCode),
+    });
+  }
+
   async sendWorkspaceInviteEmail(input: {
     email: string;
     inviterName: string;
@@ -122,6 +139,44 @@ export class AuthMailerService {
           <div style="height:1px;background:rgba(255,255,255,0.08);margin:24px 0;"></div>
           <p style="margin:0;font-size:13px;line-height:1.7;color:#71717a;">
             Built for focused, collaborative workflows.
+          </p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+    `;
+  }
+
+  private buildPasswordResetOtpTemplate(otpCode: string) {
+    const expiresInMinutes = this.getOtpExpiresMinutes();
+
+    return `
+     <!doctype html>
+<html lang="en">
+  <body style="margin:0;padding:0;background:#050505;color:#f4f4f5;font-family:Inter,Arial,sans-serif;">
+    <div style="padding:32px 16px;background:radial-gradient(circle at top, rgba(255,255,255,0.10), transparent 35%), #050505;">
+      <div style="max-width:560px;margin:0 auto;border:1px solid rgba(255,255,255,0.08);border-radius:28px;overflow:hidden;background:rgba(255,255,255,0.04);box-shadow:0 24px 80px rgba(0,0,0,0.45);">
+        <div style="padding:40px 40px 24px;border-bottom:1px solid rgba(255,255,255,0.08);">
+          <div style="font-size:20px;font-weight:600;color:#ffffff;margin-bottom:20px;">Collability</div>
+          <h1 style="margin:0 0 12px;font-size:34px;line-height:1.05;font-weight:600;color:#ffffff;">
+            Reset your password
+          </h1>
+          <p style="margin:0;font-size:16px;line-height:1.7;color:#a1a1aa;">
+            Use the verification code below to set a new password.
+          </p>
+        </div>
+        <div style="padding:32px 40px 40px;">
+          <div style="margin-bottom:24px;padding:24px;border-radius:24px;background:linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));border:1px solid rgba(255,255,255,0.08);text-align:center;">
+            <div style="font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#a1a1aa;margin-bottom:12px;">
+              Password reset code
+            </div>
+            <div style="font-size:42px;line-height:1;font-weight:700;letter-spacing:0.34em;text-indent:0.34em;color:#ffffff;">
+              ${otpCode}
+            </div>
+          </div>
+          <p style="margin:0;font-size:15px;line-height:1.7;color:#d4d4d8;">
+            This code expires in ${expiresInMinutes} minutes. If you didn't request this, you can safely ignore this email.
           </p>
         </div>
       </div>

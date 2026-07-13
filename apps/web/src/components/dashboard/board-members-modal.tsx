@@ -268,7 +268,7 @@ export function BoardMembersModal({
                   <div className="px-4 py-8 text-sm text-[#8f8f89]">
                     {debouncedSearch
                       ? "No workspace members match this search."
-                      : "Start typing or pick from the first matching workspace members here."}
+                      : "No available workspace members."}
                   </div>
                 )}
               </div>

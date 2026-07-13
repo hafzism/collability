@@ -30,10 +30,24 @@ export function getErrorMessage(
   fallback = "Something went wrong. Please try again.",
 ) {
   if (error instanceof Error && error.message) {
-    return error.message;
+    return getUserSafeErrorMessage(error.message, fallback);
   }
 
   return fallback;
+}
+
+function getUserSafeErrorMessage(message: string, fallback: string) {
+  const normalizedMessage = message.toLowerCase();
+  const isTechnicalAuthMessage =
+    normalizedMessage.includes("refresh token") ||
+    normalizedMessage.includes("jwt") ||
+    normalizedMessage === "unauthorized";
+
+  if (isTechnicalAuthMessage) {
+    return "Your session expired. Please sign in again.";
+  }
+
+  return message || fallback;
 }
 
 export function requestOtp(email: string) {
@@ -48,6 +62,43 @@ export function verifyOtp(email: string, code: string) {
   return apiRequest<{ verificationToken: string }>("/auth/verify-otp", {
     method: "POST",
     body: { email, code },
+    skipAuthRetry: true,
+  });
+}
+
+export function startGoogleAuth() {
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+  window.location.href = `${apiBaseUrl}/auth/google`;
+}
+
+export function completeOAuthLogin(accessToken: string) {
+  setAccessToken(accessToken);
+}
+
+export function requestPasswordReset(email: string) {
+  return apiRequest<{ message: string }>("/auth/request-password-reset", {
+    method: "POST",
+    body: { email },
+    skipAuthRetry: true,
+  });
+}
+
+export function verifyPasswordReset(email: string, code: string) {
+  return apiRequest<{ resetToken: string }>("/auth/verify-password-reset", {
+    method: "POST",
+    body: { email, code },
+    skipAuthRetry: true,
+  });
+}
+
+export function resetPassword(input: {
+  email: string;
+  password: string;
+  resetToken: string;
+}) {
+  return apiRequest<{ message: string }>("/auth/reset-password", {
+    method: "POST",
+    body: input,
     skipAuthRetry: true,
   });
 }

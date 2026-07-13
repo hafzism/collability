@@ -43,6 +43,16 @@ enum DueDateReminderStatus {
   CANCELED
 }
 
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+}
+
+enum EmailOtpPurpose {
+  SIGNUP
+  PASSWORD_RESET
+}
+
 //--------------------
 // user
 // -------------------
@@ -52,7 +62,9 @@ model User {
   email        String   @unique
   name         String
   avatarUrl    String?
-  passwordHash String
+  passwordHash String?
+  authProvider AuthProvider @default(EMAIL)
+  googleId     String?      @unique
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -74,13 +86,14 @@ model EmailOtpVerification {
   id         String   @id @default(cuid())
   email      String
   codeHash   String
+  purpose    EmailOtpPurpose @default(SIGNUP)
   expiresAt  DateTime
   verifiedAt DateTime?
   attempts   Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  @@index([email, createdAt])
+  @@index([email, purpose, createdAt])
 }
 
 model AuthSession {

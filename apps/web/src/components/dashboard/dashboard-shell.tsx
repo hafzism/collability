@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { cn } from "@/lib/utils";
 import { type AuthUser } from "@/lib/auth";
 import { getCardPresenceSummary } from "@/lib/board-presence";
@@ -23,10 +25,23 @@ export function DashboardShell({
   onLogout,
 }: {
   user: AuthUser;
-  onLogout: () => void;
+  onLogout: () => Promise<void>;
 }) {
   const dashboard = useDashboardShell(user);
   const cardDetailModalState = dashboard.cardDetailModalState;
+  const [isConfirmingLogout, setIsConfirmingLogout] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  async function handleConfirmLogout() {
+    setIsLoggingOut(true);
+
+    try {
+      await onLogout();
+    } finally {
+      setIsLoggingOut(false);
+      setIsConfirmingLogout(false);
+    }
+  }
 
   return (
     <div className="h-screen overflow-hidden bg-[#050505] text-[#f3f3f1]">
@@ -53,7 +68,7 @@ export function DashboardShell({
             dashboard.setIsAccountMenuOpen(false);
             dashboard.setIsAccountSettingsModalOpen(true);
           }}
-          onLogout={onLogout}
+          onLogout={() => setIsConfirmingLogout(true)}
           onOpenWorkspaceDetails={(workspaceId) => {
             dashboard.setWorkspaceDetailsWorkspaceId(workspaceId);
             dashboard.setIsWorkspaceMenuOpen(false);
@@ -104,18 +119,8 @@ export function DashboardShell({
               hasAppliedBoardCardFilters={
                 dashboard.hasAppliedBoardCardFilters
               }
+              hasActiveBoard={Boolean(dashboard.activeBoard)}
               isSidebarOpen={dashboard.isSidebarOpen}
-              onCreateList={() => {
-                if (
-                  !dashboard.activeBoard ||
-                  dashboard.activeBoardDetail?.currentUserBoardRole !==
-                    "MANAGER"
-                ) {
-                  return;
-                }
-
-                dashboard.setCreateListRequestId((current) => current + 1);
-              }}
               onApplyBoardFilters={dashboard.setAppliedBoardCardFilters}
               onBoardSearchChange={dashboard.setBoardSearchText}
               onOpenBoardActivity={() => {
@@ -336,6 +341,39 @@ export function DashboardShell({
           onLogoutOtherDevices={dashboard.handleLogoutOtherDevices}
           sessions={dashboard.accountSessions}
         />
+      ) : null}
+
+      {isConfirmingLogout ? (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/72 px-4"
+          role="dialog"
+        >
+          <div className="w-full max-w-[340px] rounded-[14px] border border-white/10 bg-[#111112] p-4 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
+            <p className="text-sm font-medium text-white">Log out?</p>
+            <p className="mt-2 text-xs leading-5 text-[#a0a09a]">
+              Are you sure you want to log out of Collability?
+            </p>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsConfirmingLogout(false)}
+                disabled={isLoggingOut}
+                className="rounded-[10px] border border-white/10 bg-transparent px-3 py-1.5 text-sm text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmLogout()}
+                disabled={isLoggingOut}
+                className="rounded-[10px] border border-[#8f2e2e] bg-[#b93838] px-3 py-1.5 text-sm font-medium text-white transition hover:bg-[#c54545] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isLoggingOut ? "Logging out..." : "Log out"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

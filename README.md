@@ -8,7 +8,6 @@ The project is built as a realistic collaboration product: a Next.js web app, a 
 
 ## Screenshots
 
-> Add screenshots or GIFs here after capturing the deployed app.
 
 | Landing Page             | Dashboard                |
 | ------------------------ | ------------------------ |
@@ -203,9 +202,12 @@ Common API values:
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/collability"
 JWT_SECRET="replace-me"
-JWT_REFRESH_SECRET="replace-me"
+REFRESH_TOKEN_SECRET="replace-me"
 OTP_VERIFICATION_SECRET="replace-me"
 WEB_APP_URL="http://localhost:3000"
+GOOGLE_CLIENT_ID="your-google-oauth-client-id"
+GOOGLE_CLIENT_SECRET="your-google-oauth-client-secret"
+GOOGLE_REDIRECT_URI="http://localhost:3001/auth/google/callback"
 SMTP_HOST=""
 SMTP_PORT=""
 SMTP_USER=""
